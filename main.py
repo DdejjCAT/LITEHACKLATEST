@@ -292,7 +292,7 @@ def get_lol_quote():
     ])
 
 def print_ascii_titles():
-    for text in ['LiteHack', 'V16']:
+    for text in ['LiteHack', 'V17']:
         output = render(text, colors=['magenta'], align='center')
         print(output)
 

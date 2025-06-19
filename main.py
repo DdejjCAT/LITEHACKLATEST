@@ -3025,7 +3025,20 @@ async def send_love(event):
         except Exception as e:
             logging.error(f"Ошибка в анимации: {e}")
             break
-        
+
+EN_TO_RU = str.maketrans("qwertyuiop[]asdfghjkl;'zxcvbnm,.",
+                         "йцукенгшщзхъфывапролджэячсмитьбю")
+
+@client.on(events.NewMessage(pattern=r'^\.раскладка$', outgoing=True))
+async def switch_layout(event):
+    reply = await event.get_reply_message()
+    if not reply:
+        await event.edit("Ответь на сообщение, чтобы поменять раскладку")
+        return
+    text = reply.text
+    await event.edit(text.translate(EN_TO_RU))
+
+
 @client.on(events.NewMessage(pattern=r'fr!roll'))
 @owner_only
 async def roll_dice(event):

@@ -2962,6 +2962,10 @@ async def seretere(event):
 async def seretere(event):
     await event.respond("ФР: Программист, плейбой, филантроп (Пасхалка)")
 
+@client.on(events.NewMessage(pattern=r'!testgit'))
+async def seretere(event):
+    await event.respond("мяумяумяу")
+    
 @client.on(events.NewMessage(pattern=r'!help'))
 async def seretere(event):
     await event.respond("Зепен: Блять хватит хелп писать тебе уже ничего не поможет (Пасхалка) [Для получения списка команд напишите fr!help ]")

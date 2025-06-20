@@ -626,6 +626,72 @@ async def read_all_handler(event):
             await client.send_read_acknowledge(dialog.entity)
     await event.respond("✅ Все сообщения помечены как прочитанные")
 
+async def resolve_reaction(chat, emoji: str):
+    """Проверяет, доступна ли emoji как кастомная и возвращает подходящий InputReaction"""
+    try:
+        result = await client(GetAvailableReactionsRequest())
+        for reaction in result.reactions:
+            if reaction.emoticon == emoji and hasattr(reaction, "selective") is False:
+                if getattr(reaction, "static_icon", None):  # обычная emoji
+                    return InputReactionEmoji(emoji)
+                elif reaction.document_id:  # premium emoji
+                    return InputReactionCustomEmoji(document_id=reaction.document_id)
+    except:
+        pass
+    return InputReactionEmoji(emoji)  # fallback
+
+@client.on(events.NewMessage(pattern=r"^fr!react (\S+)\s+(all|\d+)$"))
+@owner_only
+async def react_messages(event):
+    emoji = event.pattern_match.group(1)
+    count = event.pattern_match.group(2)
+    limit = None if count == "all" else int(count)
+
+    chat = await event.get_input_chat()
+    messages = [msg async for msg in client.iter_messages(chat, limit=limit)]
+
+    input_reaction = await resolve_reaction(chat, emoji)
+    total = 0
+
+    for msg in messages:
+        if msg.out or msg.sender_id:
+            try:
+                await client(SendReactionRequest(
+                    peer=chat,
+                    msg_id=msg.id,
+                    reaction=[input_reaction],
+                    big=True
+                ))
+                total += 1
+            except Exception as e:
+                print(f"❌ Ошибка при реакции на сообщение {msg.id}: {e}")
+
+    await event.reply(f"✅ Поставлено {emoji} на {total} сообщений.")
+
+@client.on(events.NewMessage(pattern=r"^fr!nonreact\s+(all|\d+)$"))
+@owner_only
+async def remove_reactions(event):
+    count = event.pattern_match.group(1)
+    limit = None if count == "all" else int(count)
+
+    chat = await event.get_input_chat()
+    messages = [msg async for msg in client.iter_messages(chat, limit=limit)]
+
+    total = 0
+    for msg in messages:
+        if msg.out or msg.sender_id:
+            try:
+                await client(SendReactionRequest(
+                    peer=chat,
+                    msg_id=msg.id,
+                    reaction=[],
+                    big=True
+                ))
+                total += 1
+            except Exception as e:
+                print(f"❌ Ошибка при удалении реакции с {msg.id}: {e}")
+
+    await event.reply(f"❌ Убраны реакции с {total} сообщений.")
 @client.on(events.NewMessage(pattern=r'^fr!admin (on|off)$'))
 @owner_only
 async def admin_handler(event):
@@ -1400,6 +1466,13 @@ async def help_handler(event):
         "`fr!ascii <текст>` — ASCII арт (латиница)\n"
         "`fr!readall` — Прочитать все сообщения\n\n"
 
+        "**👍 Реакции:**\n"
+        "`fr!react 👍 all` — Поставить 👍 на все сообщения чата\n"
+        "`fr!react 👍 200` — Поставить 👍 на последние 200 сообщений\n"
+        "`fr!nonreact all` — Убрать все реакции со всех сообщений\n"
+        "`fr!nonreact 200` — Убрать реакции с 200 последних сообщений\n"
+        "`fr!readall` — Прочитать все сообщения\n\n"
+        
         "**🎭 Внешность и статус:**\n"
         "`fr!anim 😺 0.3` — Анимация имени и био\n\n"
 

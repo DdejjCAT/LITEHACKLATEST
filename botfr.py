@@ -13,7 +13,7 @@ from prompt_toolkit.shortcuts import (
 from prompt_toolkit.styles import Style
 
 COMMANDS_FILE = "commands.json"
-OPTIONS_FILE = "options.txt"
+OPTIONS_FILE = "config.txt"
 MAIN_PY = "main.py"
 
 REQUIREMENTS = [

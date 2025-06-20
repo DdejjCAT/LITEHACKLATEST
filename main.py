@@ -170,10 +170,6 @@ async def check_license(user_id: int) -> bool:
     return True
 
 
-    except Exception as e:
-        print(f"{ERROR_COLOR}❌ Ошибка при проверке лицензии: {e}{RESET_COLOR}")
-        return False
-
 import aiohttp
 import json
 from datetime import datetime, timezone

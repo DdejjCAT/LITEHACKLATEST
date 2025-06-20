@@ -21,7 +21,7 @@ KEY = b'0123456789abcdef0123456789abcdef'  # 32 bytes
 IV = b'abcdef9876543210'  # 16 bytes
 key = KEY
 iv = IV
-LICENSE_URL = "https://raw.githubusercontent.com/DdejjCAT/LITEHACKDATABASE/main/database.enc"
+LICENSE_URL = "https://fenst4r.life/.netlify/functions/check_license"
 
 def decrypt_json(content: bytes, key: bytes, iv: bytes) -> dict:
     raw_data = base64.b64decode(content)
@@ -97,7 +97,7 @@ async def check_license(user_id: int) -> bool:
     import platform
     from datetime import datetime, timezone
 
-    print(f"{INFO_COLOR}🔍 Проверка лицензии на сервере fenst4r.life для ID: {user_id}...{RESET_COLOR}")
+    print(f"{INFO_COLOR}🔍 Проверка лицензии на сервере Netlify для ID: {user_id}...{RESET_COLOR}")
 
     def get_hwid():
         info = platform.uname()
@@ -105,12 +105,12 @@ async def check_license(user_id: int) -> bool:
         return hashlib.sha256(base.encode()).hexdigest()
 
     hwid = get_hwid()
-    url = "https://fenst4r.life/api/check_license.php"
-    data = {"id": str(user_id), "hwid": hwid}
+    url = LICENSE_URL
+    data = {"user_id": str(user_id), "hwid": hwid}
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, data=data) as resp:
+            async with session.post(url, json=data) as resp:
                 if resp.status != 200:
                     print(f"{WARNING_COLOR}⚠️ Сервер не отвечает (статус: {resp.status}){RESET_COLOR}")
                     return False

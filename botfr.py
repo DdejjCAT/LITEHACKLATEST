@@ -298,7 +298,7 @@ def check_options_file():
                 empty_fields.append(key)
 
     if empty_fields:
-        msg = "Пожалуйста, заполните следующие поля в options.txt:\n\n"
+        msg = "Пожалуйста, заполните следующие поля в config.txt:\n\n"
         msg += "\n".join(f"- {field}" for field in empty_fields)
         msg += "\n\nПосмотрите инструкцию в меню."
         message_dialog(title="❌ Ошибка настройки", text=msg, style=style).run()

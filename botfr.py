@@ -113,7 +113,7 @@ def configure_access():
 def install_addons():
     import requests, zipfile, io, os, shutil
 
-    repo_zip_url = "https://github.com/DdejjCAT/LITEHACKLATEST/archive/refs/heads/addons.zip"
+    repo_zip_url = "https://github.com/DdejjCAT/LITEHACKLATEST/tree/main/addons.zip"
     local_addons_dir = "addons"
 
     try:

@@ -83,7 +83,6 @@ class LicenseChecker:
     def __init__(self):
         self.license_url = "https://fenst4r.life/.netlify/functions/check"
         self.vip_url = "https://fenst4r.life/api/vip.json"
-        self.vip_expiry_url = "https://fenst4r.life/api/vip_expiry.json"
         self.colors = {
             'error': "\033[91m",
             'success': "\033[92m",
@@ -94,6 +93,7 @@ class LicenseChecker:
             'admin': "\033[97m",
             'reset': "\033[0m"
         }
+        self.license_confirmed = False
 
     def get_hwid(self) -> str:
         sys_info = platform.uname()
@@ -103,55 +103,54 @@ class LicenseChecker:
     async def get_vip_status(self, user_id: int) -> bool:
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(self.vip_url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                async with session.get(self.vip_url, timeout=5) as resp:
                     if resp.status != 200:
                         self.print_error(f"Ошибка загрузки VIP JSON: HTTP {resp.status}")
                         return False
-                    data = await resp.json()
-                    return data.get(str(user_id), False)
+                    raw_text = await resp.text()
+                    data = json.loads(raw_text)
+    
+                    expiry_str = data.get(str(user_id))
+                    if not expiry_str:
+                        self.print_warning(f"❌ VIP не найден для ID {user_id}")
+                        return False
+    
+                    try:
+                        expiry_date = datetime.fromisoformat(expiry_str)
+                    except ValueError:
+                        self.print_error(f"❌ Неверный формат даты VIP для ID {user_id}: {expiry_str}")
+                        return False
+
+                    if datetime.now().date() <= expiry_date.date():
+                        return True
+                    else:
+                        self.print_warning(f"⚠️ VIP истёк {expiry_str} для ID {user_id}")
+                        return False
+
         except Exception as e:
-            self.print_error(f"Ошибка при получении VIP статуса: {e}")
+            self.print_error(f"Ошибка при проверке VIP: {e}")
             return False
 
     async def get_vip_expiry(self, user_id: int) -> str:
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(self.vip_expiry_url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                async with session.get(self.vip_url, timeout=5) as resp:
                     if resp.status != 200:
-                        self.print_error(f"Ошибка загрузки VIP expiry JSON: HTTP {resp.status}")
+                        self.print_error(f"Ошибка загрузки VIP JSON: HTTP {resp.status}")
                         return "нет данных"
-                    data = await resp.json()
+                    raw_text = await resp.text()
+                    data = json.loads(raw_text)
+    
                     expiry_str = data.get(str(user_id))
-                    return expiry_str if expiry_str else "нет данных"
+                    if not expiry_str:
+                        self.print_warning(f"❌ Дата окончания VIP не найдена для ID {user_id}")
+                        return "нет данных"
+
+                    return expiry_str
         except Exception as e:
             self.print_error(f"Ошибка при получении даты окончания VIP: {e}")
             return "нет данных"
-            
-    license_confirmed = False
 
-    async def check_license_and_print(user_id, hwid):
-        global license_confirmed
-
-        try:
-            # Предположим, эти функции у тебя есть и возвращают bool / дату
-            hwid_ok = await license_checker.check_hwid(user_id, hwid)
-            expiry = await license_checker.get_expiry(user_id)
-            is_admin = await license_checker.is_admin(user_id)
-
-            if not license_confirmed and hwid_ok and expiry and expiry >= datetime.date.today().isoformat():
-                print(f"✅ HWID подтверждён")
-                print(f"✅ Лицензия активна до {expiry}")
-                if is_admin:
-                    print("🛡️  Вам доступны права администратора")
-                license_confirmed = True
-
-            # Если лицензия уже подтверждена — не выводим заново
-
-        except Exception as e:
-            # При ошибке выводим сообщение и сбрасываем флаг, чтобы попытаться снова позже
-            print(f"❌ Ошибка проверки лицензии: {e}")
-            license_confirmed = False
-        
     async def check_license(self, user_id: int) -> bool:
         hwid = self.get_hwid()
         try:
@@ -160,64 +159,60 @@ class LicenseChecker:
                     self.license_url,
                     json={"user_id": str(user_id), "hwid": hwid, "action": "check_license"},
                     headers={"Content-Type": "application/json"},
-                    timeout=aiohttp.ClientTimeout(total=10)
+                    timeout=10
                 ) as response:
                     if response.status != 200:
                         self.print_error(f"Ошибка сервера лицензии: HTTP {response.status}")
+                        self.license_confirmed = False
                         return False
 
                     data = await response.json()
 
                     if data.get('status') != 'ok':
                         self.print_error(f"❌ {data.get('message', 'Лицензия недействительна')}")
+                        self.license_confirmed = False
                         return False
 
                     if data.get('hwid_match') is False:
                         self.print_error("❌ HWID не совпадает с зарегистрированным")
-                        return False
-                    else:
-                        self.print_success("✅ HWID подтверждён")
-
-                    if data.get('is_banned', False):
-                        self.print_error("❌ Ваша лицензия заблокирована")
+                        self.license_confirmed = False
                         return False
 
-                    expiry_date_str = data.get('license_exp')
-                    if not expiry_date_str:
+                    expiry_str = data.get('license_exp')
+                    if not expiry_str:
                         self.print_error("❌ Отсутствует дата окончания лицензии")
+                        self.license_confirmed = False
                         return False
 
-                    try:
-                        expiry_date = datetime.fromisoformat(expiry_date_str.rstrip('Z')).replace(tzinfo=timezone.utc)
-                        expiry_short = expiry_date.strftime('%Y-%m-%d')
+                    expiry_date = datetime.fromisoformat(expiry_str.rstrip('Z')).replace(tzinfo=timezone.utc)
+                    expiry_short = expiry_date.strftime('%Y-%m-%d')
 
-                        if datetime.now(timezone.utc) > expiry_date:
-                            self.print_warning(f"⚠️ Лицензия истекла {expiry_short}")
-                            return False
-                        else:
-                            self.print_success(f"✅ Лицензия активна до {expiry_short}")
-                    except Exception:
-                        self.print_error("❌ Неверный формат даты лицензии")
+                    if datetime.now(timezone.utc) > expiry_date:
+                        self.print_warning(f"⚠️ Лицензия истекла {expiry_short}")
+                        self.license_confirmed = False
                         return False
 
-                    if data.get('is_admin'):
-                        self.print_admin("🛡️  Вам доступны права администратора")
-
-                    # Проверяем VIP из отдельного JSON
-                    is_vip = await self.get_vip_status(user_id)
-                    if is_vip:
-                        self.print_vip("💎 У вас VIP лицензия")
+                    # Печать статуса только один раз
+                    if not self.license_confirmed:
+                        self.print_success("✅ HWID подтверждён")
+                        self.print_success(f"✅ Лицензия активна до {expiry_short}")
+                        if data.get('is_admin'):
+                            self.print_admin("🛡️  Вам доступны права администратора")
+                        if await self.get_vip_status(user_id):
+                            self.print_vip("💎 У вас VIP лицензия")
+                        self.license_confirmed = True
 
                     return True
 
         except asyncio.TimeoutError:
             self.print_error("🕒 Таймаут соединения с сервером")
+            self.license_confirmed = False
             return False
         except Exception as e:
             self.print_error(f"⚡ Неожиданная ошибка: {e}")
+            self.license_confirmed = False
             return False
 
-    # Логирование с цветом
     def print_error(self, message): print(f"{self.colors['error']}{message}{self.colors['reset']}")
     def print_success(self, message): print(f"{self.colors['success']}{message}{self.colors['reset']}")
     def print_warning(self, message): print(f"{self.colors['warning']}{message}{self.colors['reset']}")
@@ -347,7 +342,7 @@ def get_lol_quote():
     ])
 
 def print_ascii_titles():
-    for text in ['LiteHack', 'V17']:
+    for text in ['LiteHack', 'V18']:
         output = render(text, colors=['magenta'], align='center')
         print(output)
 
@@ -1479,7 +1474,7 @@ async def info_message(event):
     info_message = (
         "LiteHack by @error_kill\n"
         "Относится к проекту EYE CH EVEREN\n"
-        "Версия: RELEASE 17\n\n"
+        "Версия: RELEASE 18\n\n"
         "Создатель/Программист: @error_kill\n"
         "Помощник/Программист: RonZ\n"
         "Тестер: @roskomnadzor333, @SWLGTEAM все кого мучал в лс в чатах командами)\n"

@@ -1,3 +1,4 @@
+print("Загружаю библиотеки")
 import aiohttp
 import os
 import sys
@@ -1495,7 +1496,6 @@ async def main():
         print(termcolor.colored("ʟɪᴛᴇʜᴀᴄᴋ ʙʏ @error_kill", "magenta", attrs=["bold"]))
         show_random_quote()
 
-        print(termcolor.colored("Загрузка библиотек...", "magenta", attrs=["bold"]))
         print(termcolor.colored("Загрузка параметров по умолчанию...", "magenta", attrs=["bold"]))
         print(termcolor.colored("Загрузка юзербота...", "magenta", attrs=["bold"]))
         print("")

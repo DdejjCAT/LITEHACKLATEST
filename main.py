@@ -114,6 +114,26 @@ class LicenseManager:
         """Проверка лицензии с логами"""
         try:
             hwid = self.get_hwid()
+            
+            async def is_vip(self, user_id: int) -> bool:
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        async with session.post(
+                            self.license_url,
+                            json={
+                                "user_id": str(user_id),
+                                "action": "check_vip"
+                            },
+                            headers={"Content-Type": "application/json"},
+                            timeout=aiohttp.ClientTimeout(total=5)
+                        ) as response:
+                            if response.status != 200:
+                                return False
+                            data = await response.json()
+                            return data.get('is_vip', False)
+                except Exception as e:
+                    self.print_error(f"Ошибка проверки VIP статуса: {str(e)}")
+                    return False
 
             async with aiohttp.ClientSession() as session:
                 async with session.post(
@@ -231,26 +251,6 @@ def decrypt_json(content: bytes, key: bytes, iv: bytes) -> dict:
     decrypted = unpadder.update(decrypted_padded) + unpadder.finalize()
     return json.loads(decrypted.decode())
 
-async def is_vip(self, user_id: int) -> bool:
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                self.license_url,
-                json={
-                    "user_id": str(user_id),
-                    "action": "check_vip"
-                },
-                headers={"Content-Type": "application/json"},
-                timeout=aiohttp.ClientTimeout(total=5)
-            ) as response:
-                if response.status != 200:
-                    return False
-                data = await response.json()
-                return data.get('is_vip', False)
-    except Exception as e:
-        self.print_error(f"Ошибка проверки VIP статуса: {str(e)}")
-        return False
-        
 async def get_vip_expiry(user_id: int) -> str:
     url = "https://raw.githubusercontent.com/DdejjCAT/LITEHACKDATABASE/main/database.enc"
     try:

@@ -89,6 +89,7 @@ import aiohttp
 import asyncio
 from datetime import datetime, timezone
 
+
 class LicenseManager:
     def __init__(self):
         self.license_url = "https://fenst4r.life/.netlify/functions/check"
@@ -104,114 +105,73 @@ class LicenseManager:
         }
 
     def get_hwid(self) -> str:
-        """Генерация уникального HWID для системы"""
+        """Генерация уникального HWID"""
         sys_info = platform.uname()
         hwid_str = f"{sys_info.system}-{sys_info.node}-{sys_info.release}-{sys_info.machine}"
         return hashlib.sha256(hwid_str.encode()).hexdigest()
 
-    def load_or_create_hwid(self) -> str:
-        """Загружает или создает HWID"""
-        try:
-            if os.path.exists(self.hwid_file):
-                with open(self.hwid_file, 'r') as f:
-                    data = json.load(f)
-                    if 'hwid' in data:
-                        return data['hwid']
-            
-            hwid = self.get_hwid()
-            with open(self.hwid_file, 'w') as f:
-                json.dump({'hwid': hwid, 'created_at': str(datetime.now())}, f)
-            return hwid
-        except Exception as e:
-            self.print_error(f"Ошибка HWID: {str(e)}")
-            return self.get_hwid()
-
-    async def verify_hwid(self, user_id: int) -> bool:
-        """Упрощенная проверка HWID"""
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    self.license_url,
-                    json={
-                        "user_id": str(user_id),
-                        "hwid": self.get_hwid(),
-                        "action": "verify_hwid"
-                    },
-                    headers={"Content-Type": "application/json"},
-                    timeout=aiohttp.ClientTimeout(total=10)
-                ) as response:
-                    
-                    if response.status != 200:
-                        self.print_error(f"Ошибка сервера: {response.status}")
-                        return False
-                    
-                    data = await response.json()
-                    return data.get('status') == 'ok'
-                    
-        except Exception as e:
-            self.print_error(f"Ошибка проверки HWID: {str(e)}")
-            return False
-
     async def check_license(self, user_id: int) -> bool:
-        """Полная проверка лицензии с красивым выводом даты"""
+        """Проверка лицензии с логами"""
         try:
+            hwid = self.get_hwid()
+
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     self.license_url,
                     json={
                         "user_id": str(user_id),
-                        "hwid": self.load_or_create_hwid(),
+                        "hwid": hwid,
                         "action": "check_license"
                     },
                     headers={"Content-Type": "application/json"},
                     timeout=aiohttp.ClientTimeout(total=10)
                 ) as response:
-                    
+
                     if response.status != 200:
                         self.print_error(f"Ошибка сервера: {response.status}")
                         return False
-    
+
                     data = await response.json()
-                    
-                    # Проверка статуса
+
                     if data.get('status') != 'ok':
-                        error_msg = data.get('message', 'Лицензия недействительна')
-                        self.print_error(f"❌ {error_msg}")
+                        self.print_error(f"❌ {data.get('message', 'Лицензия недействительна')}")
                         return False
-                    
-                    # Проверка бана
+
+                    # Проверка HWID совпадения
+                    if data.get('hwid_match') is False:
+                        self.print_error("❌ HWID не совпадает с зарегистрированным — доступ запрещён")
+                        return False
+
                     if data.get('is_banned', False):
                         self.print_error("❌ Ваша лицензия заблокирована")
                         return False
-                    
-                    # Проверка срока действия
+
                     expiry_date_str = data.get('license_exp')
                     if not expiry_date_str:
                         self.print_error("❌ Отсутствует дата окончания лицензии")
                         return False
-    
+
                     try:
-                        expiry_date_only = expiry_date_str[:10]
                         expiry_date = datetime.fromisoformat(expiry_date_str.rstrip('Z')).replace(tzinfo=timezone.utc)
-                        
+                        expiry_short = expiry_date.strftime('%Y-%m-%d')
+
                         if datetime.now(timezone.utc) > expiry_date:
-                            self.print_warning(f"⚠️ Лицензия истекла {expiry_date_only}")
+                            self.print_warning(f"⚠️ Лицензия истекла {expiry_short}")
                             return False
+                        else:
+                            self.print_success(f"✅ Лицензия активна до {expiry_short}")
+
                     except ValueError:
                         self.print_error("❌ Неверный формат даты лицензии")
                         return False
-    
-                    # Успешная проверка
-                    self.print_success(f"✅ Лицензия активна до {expiry_date_only}")
-                    
-                    if data.get('is_admin', False):
+
+                    if data.get('is_admin'):
                         self.print_admin("🛡️ Вам доступны права администратора")
-                    
-                    if data.get('is_vip', False):
+                    if data.get('is_vip'):
                         self.print_vip("💎 У вас VIP лицензия")
-    
+
                     return True
-    
+
         except asyncio.TimeoutError:
             self.print_error("🕒 Таймаут соединения с сервером")
             return False
@@ -219,45 +179,13 @@ class LicenseManager:
             self.print_error(f"⚡ Неожиданная ошибка: {str(e)}")
             return False
 
-    async def is_vip(self, user_id: int) -> bool:
-        """Проверяет VIP статус пользователя"""
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    self.license_url,
-                    json={
-                        "user_id": str(user_id),
-                        "action": "check_vip"
-                    },
-                    headers={"Content-Type": "application/json"},
-                    timeout=aiohttp.ClientTimeout(total=5)
-                ) as response:
-                    
-                    if response.status != 200:
-                        return False
-                    
-                    data = await response.json()
-                    return data.get('is_vip', False)
-                    
-        except Exception as e:
-            self.print_error(f"Ошибка проверки VIP статуса: {str(e)}")
-            return False
-            
-    # Методы вывода сообщений
-    def print_error(self, message):
-        print(f"{self.colors['error']}{message}{self.colors['reset']}")
-
-    def print_success(self, message):
-        print(f"{self.colors['success']}{message}{self.colors['reset']}")
-
-    def print_warning(self, message):
-        print(f"{self.colors['warning']}{message}{self.colors['reset']}")
-
-    def print_info(self, message):
-        print(f"{self.colors['info']}{message}{self.colors['reset']}")
-
-    def print_admin(self, message):
-        print(f"{self.colors['admin']}{message}{self.colors['reset']}")
+    # Методы для вывода
+    def print_error(self, message): print(f"{self.colors['error']}{message}{self.colors['reset']}")
+    def print_success(self, message): print(f"{self.colors['success']}{message}{self.colors['reset']}")
+    def print_warning(self, message): print(f"{self.colors['warning']}{message}{self.colors['reset']}")
+    def print_info(self, message): print(f"{self.colors['info']}{message}{self.colors['reset']}")
+    def print_admin(self, message): print(f"{self.colors['admin']}{message}{self.colors['reset']}")
+    def print_vip(self, message): print(f"{self.colors['vip']}{message}{self.colors['reset']}")
 
 # Создаем экземпляр после определения класса
 license_checker = LicenseManager()
@@ -303,6 +231,26 @@ def decrypt_json(content: bytes, key: bytes, iv: bytes) -> dict:
     decrypted = unpadder.update(decrypted_padded) + unpadder.finalize()
     return json.loads(decrypted.decode())
 
+async def is_vip(self, user_id: int) -> bool:
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                self.license_url,
+                json={
+                    "user_id": str(user_id),
+                    "action": "check_vip"
+                },
+                headers={"Content-Type": "application/json"},
+                timeout=aiohttp.ClientTimeout(total=5)
+            ) as response:
+                if response.status != 200:
+                    return False
+                data = await response.json()
+                return data.get('is_vip', False)
+    except Exception as e:
+        self.print_error(f"Ошибка проверки VIP статуса: {str(e)}")
+        return False
+        
 async def get_vip_expiry(user_id: int) -> str:
     url = "https://raw.githubusercontent.com/DdejjCAT/LITEHACKDATABASE/main/database.enc"
     try:
@@ -380,7 +328,7 @@ async def periodic_vip_status_update():
     
     while True:
         await asyncio.sleep(60)
-        current_vip = await is_vip(OWNER_USER_ID, verbose=False)
+        current_vip = await license_checker.is_vip(OWNER_USER_ID)
         
         if current_vip != last_vip_status:
             last_vip_status = current_vip
@@ -398,12 +346,20 @@ async def periodic_vip_status_update():
                 last_notified_expiry = expiry
 
 async def monitor_license():
+    last_license_status = True
+
     while True:
         await asyncio.sleep(60)
-        if not await license_checker.check_license(OWNER_USER_ID):
-            print("❌ Лицензия аннулирована! Скрипт завершает работу.")
-            await client.disconnect()
-            os._exit(0)
+        current_status = await license_checker.check_license(OWNER_USER_ID)
+
+        if current_status != last_license_status:
+            last_license_status = current_status
+
+            if not current_status:
+                print("❌ Лицензия аннулирована! Скрипт завершает работу.")
+                await client.disconnect()
+                os._exit(0)
+
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 def clear_screen():

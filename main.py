@@ -126,7 +126,32 @@ class LicenseChecker:
         except Exception as e:
             self.print_error(f"Ошибка при получении даты окончания VIP: {e}")
             return "нет данных"
+            
+    license_confirmed = False
 
+    async def check_license_and_print(user_id, hwid):
+        global license_confirmed
+
+        try:
+            # Предположим, эти функции у тебя есть и возвращают bool / дату
+            hwid_ok = await license_checker.check_hwid(user_id, hwid)
+            expiry = await license_checker.get_expiry(user_id)
+            is_admin = await license_checker.is_admin(user_id)
+
+            if not license_confirmed and hwid_ok and expiry and expiry >= datetime.date.today().isoformat():
+                print(f"✅ HWID подтверждён")
+                print(f"✅ Лицензия активна до {expiry}")
+                if is_admin:
+                    print("🛡️  Вам доступны права администратора")
+                license_confirmed = True
+
+            # Если лицензия уже подтверждена — не выводим заново
+
+        except Exception as e:
+            # При ошибке выводим сообщение и сбрасываем флаг, чтобы попытаться снова позже
+            print(f"❌ Ошибка проверки лицензии: {e}")
+            license_confirmed = False
+        
     async def check_license(self, user_id: int) -> bool:
         hwid = self.get_hwid()
         try:

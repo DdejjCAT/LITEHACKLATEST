@@ -92,7 +92,6 @@ from datetime import datetime, timezone
 class LicenseManager:
     def __init__(self):
         self.license_url = "https://fenst4r.life/.netlify/functions/check"
-        self.hwid_file = "hwid_config.json"
         self.colors = {
             'error': "\033[91m",
             'success': "\033[92m",
@@ -135,7 +134,7 @@ class LicenseManager:
                     self.license_url,
                     json={
                         "user_id": str(user_id),
-                        "hwid": self.load_or_create_hwid(),
+                        "hwid": self.get_hwid(),
                         "action": "verify_hwid"
                     },
                     headers={"Content-Type": "application/json"},

@@ -72,23 +72,11 @@ client = TelegramClient(session_name, api_id, api_hash)
 
 
 # ==================== КЛАСС ПРОВЕРКИ ЛИЦЕНЗИЙ ====================
-
 import hashlib
 import platform
-import json
-import os
 import aiohttp
 import asyncio
 from datetime import datetime, timezone
-
-import hashlib
-import platform
-import json
-import os
-import aiohttp
-import asyncio
-from datetime import datetime, timezone
-
 
 class LicenseManager:
     def __init__(self):
@@ -105,48 +93,49 @@ class LicenseManager:
         }
 
     def get_hwid(self) -> str:
-        """Генерация уникального HWID"""
+        """Генерация уникального HWID для системы"""
         sys_info = platform.uname()
         hwid_str = f"{sys_info.system}-{sys_info.node}-{sys_info.release}-{sys_info.machine}"
         return hashlib.sha256(hwid_str.encode()).hexdigest()
 
-    async def check_license(self, user_id: int) -> bool:
-        """Проверка лицензии с логами"""
+    async def verify_hwid(self, user_id: int) -> bool:
+        """Проверка HWID отдельно"""
         try:
             hwid = self.get_hwid()
-            
-            async def is_vip(self, user_id: int) -> bool:
-                try:
-                    async with aiohttp.ClientSession() as session:
-                        async with session.post(
-                            self.license_url,
-                            json={
-                                "user_id": str(user_id),
-                                "action": "check_vip"
-                            },
-                            headers={"Content-Type": "application/json"},
-                            timeout=aiohttp.ClientTimeout(total=5)
-                        ) as response:
-                            if response.status != 200:
-                                return False
-                            data = await response.json()
-                            return data.get('is_vip', False)
-                except Exception as e:
-                    self.print_error(f"Ошибка проверки VIP статуса: {str(e)}")
-                    return False
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    self.license_url,
+                    json={"user_id": str(user_id), "hwid": hwid, "action": "verify_hwid"},
+                    headers={"Content-Type": "application/json"},
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as response:
+                    if response.status != 200:
+                        self.print_error(f"Ошибка сервера: {response.status}")
+                        return False
+
+                    data = await response.json()
+                    if data.get("status") == "ok" and data.get("hwid_match") is True:
+                        self.print_success("✅ HWID подтверждён")
+                        return True
+                    else:
+                        self.print_error("❌ HWID не совпадает — доступ запрещён")
+                        return False
+        except Exception as e:
+            self.print_error(f"Ошибка проверки HWID: {str(e)}")
+            return False
+
+    async def check_license(self, user_id: int) -> bool:
+        """Полная проверка лицензии"""
+        try:
+            hwid = self.get_hwid()
 
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     self.license_url,
-                    json={
-                        "user_id": str(user_id),
-                        "hwid": hwid,
-                        "action": "check_license"
-                    },
+                    json={"user_id": str(user_id), "hwid": hwid, "action": "check_license"},
                     headers={"Content-Type": "application/json"},
                     timeout=aiohttp.ClientTimeout(total=10)
                 ) as response:
-
                     if response.status != 200:
                         self.print_error(f"Ошибка сервера: {response.status}")
                         return False
@@ -157,10 +146,11 @@ class LicenseManager:
                         self.print_error(f"❌ {data.get('message', 'Лицензия недействительна')}")
                         return False
 
-                    # Проверка HWID совпадения
                     if data.get('hwid_match') is False:
-                        self.print_error("❌ HWID не совпадает с зарегистрированным — доступ запрещён")
+                        self.print_error("❌ HWID не совпадает с зарегистрированным")
                         return False
+                    else:
+                        self.print_success("✅ HWID подтверждён")
 
                     if data.get('is_banned', False):
                         self.print_error("❌ Ваша лицензия заблокирована")
@@ -180,7 +170,6 @@ class LicenseManager:
                             return False
                         else:
                             self.print_success(f"✅ Лицензия активна до {expiry_short}")
-
                     except ValueError:
                         self.print_error("❌ Неверный формат даты лицензии")
                         return False
@@ -199,13 +188,32 @@ class LicenseManager:
             self.print_error(f"⚡ Неожиданная ошибка: {str(e)}")
             return False
 
-    # Методы для вывода
+    async def is_vip(self, user_id: int) -> bool:
+        """Проверяет VIP статус пользователя"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    self.license_url,
+                    json={"user_id": str(user_id), "action": "check_vip"},
+                    headers={"Content-Type": "application/json"},
+                    timeout=aiohttp.ClientTimeout(total=5)
+                ) as response:
+                    if response.status != 200:
+                        return False
+                    data = await response.json()
+                    return data.get('is_vip', False)
+        except Exception as e:
+            self.print_error(f"Ошибка проверки VIP статуса: {str(e)}")
+            return False
+
+    # ================= Логирование =================
     def print_error(self, message): print(f"{self.colors['error']}{message}{self.colors['reset']}")
     def print_success(self, message): print(f"{self.colors['success']}{message}{self.colors['reset']}")
     def print_warning(self, message): print(f"{self.colors['warning']}{message}{self.colors['reset']}")
     def print_info(self, message): print(f"{self.colors['info']}{message}{self.colors['reset']}")
     def print_admin(self, message): print(f"{self.colors['admin']}{message}{self.colors['reset']}")
     def print_vip(self, message): print(f"{self.colors['vip']}{message}{self.colors['reset']}")
+
 
 # Создаем экземпляр после определения класса
 license_checker = LicenseManager()

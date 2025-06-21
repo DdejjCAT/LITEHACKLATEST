@@ -110,7 +110,7 @@ def configure_access():
                 json.dump(data, f, indent=2)
             message_dialog(title="Готово", text=f"ID {uid} добавлен в whitelist команды '{cmd}'.", style=style).run()
 
-def install_():
+def install_addons():
     import requests, zipfile, io, os, shutil
 
     repo_zip_url = "https://github.com/DdejjCAT/LITEHACKADDONS/archive/refs/heads/main.zip"

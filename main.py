@@ -175,7 +175,7 @@ class LicenseChecker:
                         return False
 
                     if data.get('is_admin'):
-                        self.print_admin("🛡️ Вам доступны права администратора")
+                        self.print_admin("🛡️  Вам доступны права администратора")
 
                     # Проверяем VIP из отдельного JSON
                     is_vip = await self.get_vip_status(user_id)

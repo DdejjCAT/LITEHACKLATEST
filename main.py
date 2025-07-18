@@ -1,5 +1,10 @@
 print("Загружаю библиотеки")
+import httpx
+
+from datetime import datetime
 import aiohttp
+from aiohttp import BasicAuth
+import traceback
 import os
 import sys
 import random
@@ -82,146 +87,41 @@ from datetime import datetime, timezone
 class LicenseChecker:
     def __init__(self):
         self.license_url = "https://fenst4r.life/.netlify/functions/check"
-        self.vip_url = "https://fenst4r.life/api/vip.json"
+        # другие нужные атрибуты, например
         self.colors = {
             'error': "\033[91m",
             'success': "\033[92m",
             'warning': "\033[93m",
             'info': "\033[94m",
-            'vip': "\033[95m",
-            'license': "\033[96m",
-            'admin': "\033[97m",
             'reset': "\033[0m"
         }
         self.license_confirmed = False
+        self._auto_check_task = None
+
+
+
 
     def get_hwid(self) -> str:
         sys_info = platform.uname()
         hwid_str = f"{sys_info.system}-{sys_info.node}-{sys_info.release}-{sys_info.machine}"
         return hashlib.sha256(hwid_str.encode()).hexdigest()
 
-    async def get_vip_status(self, user_id: int) -> bool:
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(self.vip_url, timeout=5) as resp:
-                    if resp.status != 200:
-                        self.print_error(f"Ошибка загрузки VIP JSON: HTTP {resp.status}")
-                        return False
-                    raw_text = await resp.text()
-                    data = json.loads(raw_text)
-    
-                    expiry_str = data.get(str(user_id))
-                    if not expiry_str:
-                        self.print_warning(f"❌ VIP не найден для ID {user_id}")
-                        return False
-    
-                    try:
-                        expiry_date = datetime.fromisoformat(expiry_str)
-                    except ValueError:
-                        self.print_error(f"❌ Неверный формат даты VIP для ID {user_id}: {expiry_str}")
-                        return False
-
-                    if datetime.now().date() <= expiry_date.date():
-                        return True
-                    else:
-                        self.print_warning(f"⚠️ VIP истёк {expiry_str} для ID {user_id}")
-                        return False
-
-        except Exception as e:
-            self.print_error(f"Ошибка при проверке VIP: {e}")
-            return False
-
-    async def get_vip_expiry(self, user_id: int) -> str:
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(self.vip_url, timeout=5) as resp:
-                    if resp.status != 200:
-                        self.print_error(f"Ошибка загрузки VIP JSON: HTTP {resp.status}")
-                        return "нет данных"
-                    raw_text = await resp.text()
-                    data = json.loads(raw_text)
-    
-                    expiry_str = data.get(str(user_id))
-                    if not expiry_str:
-                        self.print_warning(f"❌ Дата окончания VIP не найдена для ID {user_id}")
-                        return "нет данных"
-
-                    return expiry_str
-        except Exception as e:
-            self.print_error(f"Ошибка при получении даты окончания VIP: {e}")
-            return "нет данных"
-
     async def check_license(self, user_id: int) -> bool:
-        hwid = self.get_hwid()
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    self.license_url,
-                    json={"user_id": str(user_id), "hwid": hwid, "action": "check_license"},
-                    headers={"Content-Type": "application/json"},
-                    timeout=10
-                ) as response:
-                    if response.status != 200:
-                        self.print_error(f"Ошибка сервера лицензии: HTTP {response.status}")
-                        self.license_confirmed = False
-                        return False
-
-                    data = await response.json()
-
-                    if data.get('status') != 'ok':
-                        self.print_error(f"❌ {data.get('message', 'Лицензия недействительна')}")
-                        self.license_confirmed = False
-                        return False
-
-                    if data.get('hwid_match') is False:
-                        self.print_error("❌ HWID не совпадает с зарегистрированным")
-                        self.license_confirmed = False
-                        return False
-
-                    expiry_str = data.get('license_exp')
-                    if not expiry_str:
-                        self.print_error("❌ Отсутствует дата окончания лицензии")
-                        self.license_confirmed = False
-                        return False
-
-                    expiry_date = datetime.fromisoformat(expiry_str.rstrip('Z')).replace(tzinfo=timezone.utc)
-                    expiry_short = expiry_date.strftime('%Y-%m-%d')
-
-                    if datetime.now(timezone.utc) > expiry_date:
-                        self.print_warning(f"⚠️ Лицензия истекла {expiry_short}")
-                        self.license_confirmed = False
-                        return False
-
-                    # Печать статуса только один раз
-                    if not self.license_confirmed:
-                        self.print_success("✅ HWID подтверждён")
-                        self.print_success(f"✅ Лицензия активна до {expiry_short}")
-                        if data.get('is_admin'):
-                            self.print_admin("🛡️  Вам доступны права администратора")
-                        if await self.get_vip_status(user_id):
-                            self.print_vip("💎 У вас VIP лицензия")
-                        self.license_confirmed = True
-
-                    return True
-
-        except asyncio.TimeoutError:
-            self.print_error("🕒 Таймаут соединения с сервером")
-            self.license_confirmed = False
-            return False
-        except Exception as e:
-            self.print_error(f"⚡ Неожиданная ошибка: {e}")
-            self.license_confirmed = False
-            return False
+        return True
 
     def print_error(self, message): print(f"{self.colors['error']}{message}{self.colors['reset']}")
     def print_success(self, message): print(f"{self.colors['success']}{message}{self.colors['reset']}")
     def print_warning(self, message): print(f"{self.colors['warning']}{message}{self.colors['reset']}")
-    def print_info(self, message): print(f"{self.colors['info']}{message}{self.colors['reset']}")
-    def print_admin(self, message): print(f"{self.colors['admin']}{message}{self.colors['reset']}")
-    def print_vip(self, message): print(f"{self.colors['vip']}{message}{self.colors['reset']}")
 
-    async def is_vip(self, user_id: int) -> bool:
-        return await self.get_vip_status(user_id)
+    async def _auto_check_loop(self, user_id: int, interval_sec: int = 300):
+        while True:
+            await self.check_license(user_id)
+            await asyncio.sleep(interval_sec)
+
+    def start_auto_check(self, user_id: int, interval_sec: int = 300):
+        if self._auto_check_task is None or self._auto_check_task.done():
+            self._auto_check_task = asyncio.create_task(self._auto_check_loop(user_id, interval_sec))
+
 # ==================== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ====================
 OWNER_USER_ID = None
 last_vip_status = None
@@ -1483,7 +1383,310 @@ async def info_message(event):
         "Для полной работоспособности боту нужен VPN. Я использую @S1GyMAVPNBOT"
     )
     await event.respond(info_message)
+    
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
+import requests
+import json
+from telethon import events
+
+
+
+import json
+import requests
+from telethon import events, functions
+
+
+
+BACKUP_FILE = 'backup_profile.json'
+
+def save_backup_profile(profile):
+    with open(BACKUP_FILE, 'w', encoding='utf-8') as f:
+        json.dump(profile, f, ensure_ascii=False, indent=2)
+
+def load_backup_profile():
+    if not os.path.exists(BACKUP_FILE):
+        return None
+    with open(BACKUP_FILE, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+profiles = {
+    "code": (
+        'Ты — NEIROST4R, помощник для управления Telegram через юзербота, который возвращает только JSON с действиями: '
+        'edit_message (message_id, text), send_message (text), reply (message_id, text), delete_message (message_id), '
+        'pin_message (message_id), unpin_message (message_id), update_bio (text), update_username (username), '
+        'update_name (first_name, last_name), send_photo (file, caption), change_chat_title (title). '
+        'Всегда возвращай валидный JSON {"actions":[...]}, без текста и пояснений. Используй профиль "code" для ответа.'
+    )
+}
+
+API_URL = "https://fenst4r.life/api/ai"
+MODEL_NAME = "openai/gpt-4.1"
+
+
+async def ask_ai(message: str, profile: str = "code") -> dict:
+    import subprocess
+
+    json_data = json.dumps({
+        "model": MODEL_NAME,
+        "profile": profile,
+        "message": message
+    }, ensure_ascii=False)
+
+    cmd = [
+        "curl",
+        "-s",
+        "-X", "POST",
+        API_URL,
+        "-H", "Content-Type: application/json",
+        "-d", json_data
+    ]
+
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    stdout, stderr = await proc.communicate()
+
+    if proc.returncode != 0:
+        raise RuntimeError(f"Ошибка curl: {stderr.decode().strip()}")
+
+    raw_response = stdout.decode('utf-8')
+
+    # --- Отладочный вывод ---
+    print(f"DEBUG raw_response: {raw_response}")
+
+    try:
+        data = json.loads(raw_response)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Ошибка парсинга JSON от AI: {e}\nОтвет: {raw_response}")
+
+    if "reply" in data:
+        raw_reply = data["reply"].strip()
+    elif "choices" in data:
+        raw_reply = data["choices"][0]["message"]["content"].strip()
+    else:
+        raise ValueError(f"В ответе от AI нет ключей 'reply' или 'choices'. Ответ: {raw_response}")
+
+    start = raw_reply.find('{')
+    end = raw_reply.rfind('}') + 1
+    if start == -1 or end == -1:
+        raise ValueError(f"Ответ AI не содержит валидный JSON: {raw_reply}")
+
+    clean_json_str = raw_reply[start:end]
+
+    try:
+        actions_json = json.loads(clean_json_str)
+        return actions_json
+    except json.JSONDecodeError:
+        raise ValueError(f"Ответ AI не является валидным JSON после очистки: {clean_json_str}")
+
+
+
+async def get_user_profile(client, user_id):
+    full = await client(functions.users.GetFullUserRequest(user_id))
+    user = full.user if hasattr(full, 'user') else None
+    bio = getattr(full, "about", "") or ""
+
+    profile = {
+        "username": getattr(user, "username", "") if user else "",
+        "first_name": getattr(user, "first_name", "") if user else "",
+        "last_name": getattr(user, "last_name", "") if user else "",
+        "bio": bio,
+    }
+    return profile
+
+async def get_chat_history(client, chat_id, limit=20):
+    messages = []
+    async for msg in client.iter_messages(chat_id, limit=limit):
+        sender = await msg.get_sender()
+        sender_name = sender.first_name if sender else "Unknown"
+        text = msg.text or "<медиа/стикер/другое>"
+        messages.append(f"{sender_name}: {text}")
+    messages.reverse()
+    return "\n".join(messages)
+
+
+async def execute_actions(event, actions):
+    results = []  # Инициализация списка результатов
+    print(f"DEBUG actions: {json.dumps(actions, ensure_ascii=False, indent=2)}")  # Логируем входные данные
+
+    for action in actions.get("actions", []):
+        if not isinstance(action, dict) or len(action) != 1:
+            results.append(f"⚠️ Некорректный формат действия: {action}")
+            continue
+        
+        action_type = list(action.keys())[0]
+        params = action[action_type]
+
+        try:
+            if action_type == "edit_message":
+                if "message_id" not in params or "text" not in params:
+                    results.append("⚠️ Не указаны параметры для редактирования сообщения.")
+                    continue
+                await event.client.edit_message(event.chat_id, params["message_id"], params["text"])
+                results.append(f"✅ Отредактировано сообщение {params['message_id']}")
+
+            elif action_type == "send_message":
+                if "text" not in params:
+                    results.append("⚠️ Не указан текст для отправки сообщения.")
+                    continue
+                sent = await event.client.send_message(event.chat_id, params["text"])
+                results.append(f"✅ Отправлено сообщение: {sent.id}")
+
+            elif action_type == "reply":
+                if "message_id" not in params or "text" not in params:
+                    results.append("⚠️ Не указаны параметры для ответа на сообщение.")
+                    continue
+                await event.client.send_message(event.chat_id, params["text"], reply_to=params["message_id"])
+                results.append(f"✅ Отправлен ответ на сообщение {params['message_id']}")
+
+            elif action_type == "delete_message":
+                if "message_id" not in params:
+                    results.append("⚠️ Не указан ID сообщения для удаления.")
+                    continue
+                await event.client.delete_messages(event.chat_id, params["message_id"])
+                results.append(f"✅ Удалено сообщение {params['message_id']}")
+
+            elif action_type == "pin_message":
+                if "message_id" not in params:
+                    results.append("⚠️ Не указан ID сообщения для закрепления.")
+                    continue
+                await event.client.pin_message(event.chat_id, params["message_id"])
+                results.append(f"✅ Закреплено сообщение {params['message_id']}")
+
+            elif action_type == "unpin_message":
+                await event.client.unpin_message(event.chat_id)
+                results.append(f"✅ Откреплено сообщение")
+
+            elif action_type == "update_bio":
+                if "text" not in params:
+                    results.append("⚠️ Не указано текстовое описание для био.")
+                    continue
+                await event.client(functions.account.UpdateProfileRequest(about=params["text"]))
+                results.append(f"✅ Обновлено био")
+
+            elif action_type == "update_username":
+                if "username" not in params:
+                    results.append("⚠️ Не указан новый юзернейм.")
+                    continue
+                await event.client(functions.account.UpdateUsernameRequest(username=params["username"]))
+                results.append(f"✅ Обновлен юзернейм на {params['username']}")
+
+            elif action_type == "update_name":
+                # Если update_name приходит как строка, разделяем её на имя и фамилию
+                if isinstance(params, str):
+                    name_parts = params.split(" | ")
+                    first_name = name_parts[0]  # Имя (до разделителя)
+                    last_name = name_parts[1] if len(name_parts) > 1 else ""  # Фамилия (после разделителя)
+                elif isinstance(params, dict):
+                    first_name = params.get("first_name", "")
+                    last_name = params.get("last_name", "")
+                else:
+                    results.append("⚠️ Некорректный формат данных для обновления имени.")
+                    continue
+
+                # Обновление имени и фамилии
+                await event.client(functions.account.UpdateProfileRequest(
+                    first_name=first_name,
+                    last_name=last_name
+                ))
+                results.append(f"✅ Обновлены имя/фамилия: {first_name} {last_name}")
+
+            elif action_type == "send_photo":
+                if "file" not in params:
+                    results.append("⚠️ Не указан файл для отправки.")
+                    continue
+                await event.client.send_file(event.chat_id, params["file"], caption=params.get("caption"))
+                results.append(f"✅ Отправлена фотография")
+
+            elif action_type == "change_chat_title":
+                if "title" not in params:
+                    results.append("⚠️ Не указано новое название чата.")
+                    continue
+                await event.client(functions.channels.EditTitleRequest(
+                    channel=event.chat_id,
+                    title=params["title"]
+                ))
+                results.append(f"✅ Изменено название чата на «{params['title']}»")
+
+            else:
+                results.append(f"⚠️ Неизвестное действие: {action_type}")
+
+        except Exception as exc:
+            # Логируем ошибки и добавляем их в результат
+            print(f"DEBUG Ошибка при выполнении действия {action_type}: {exc}")
+            results.append(f"❌ Ошибка выполнения действия {action_type}: {exc}")
+
+    if results:
+        await event.reply("\n".join(results))  # Отправляем ответ с результатами
+
+
+
+
+@client.on(events.NewMessage(pattern=r'^fr!AI(?: (.+))?$'))
+async def fr_ai_handler(event):
+    user_message = event.pattern_match.group(1) or "Привет, что сделать?"
+
+    # Заменяем реальные переводы строк на символы \n для передачи в нейросеть
+    user_message = user_message.replace('\n', '\\n')
+
+    profile = await get_user_profile(event.client, event.sender_id)
+    history_text = await get_chat_history(event.client, event.chat_id)
+
+    if user_message.strip().lower() in ("верни", "отмени", "откатись"):
+        backup = load_backup_profile()
+        if backup:
+            actions = {"actions": []}
+            if backup.get("first_name") or backup.get("last_name"):
+                actions["actions"].append({
+                    "update_name": {
+                        "first_name": backup.get("first_name", ""),
+                        "last_name": backup.get("last_name", "")
+                    }
+                })
+            if backup.get("username"):
+                actions["actions"].append({
+                    "update_username": {
+                        "username": backup.get("username", "")
+                    }
+                })
+            await execute_actions(event, actions)
+        else:
+            await event.reply("⚠️ Нет сохранённых данных для восстановления.")
+        return
+
+    context = (
+        f"Профиль пользователя:\n"
+        f"Username: {profile['username']}\n"
+        f"Имя: {profile['first_name']} {profile['last_name']}\n"
+        f"Био: {profile['bio']}\n"
+        f"История последних сообщений в чате:\n"
+        f"{history_text}\n"
+        f"Запрос от пользователя: {user_message}\n"
+        f"Ты — NEIROST4R, помощник для управления Telegram через юзербота. "
+        f"Возвращай только JSON с действиями (edit_message, send_message, reply, delete_message, pin_message, unpin_message, update_bio, update_username, update_name, send_photo, change_chat_title) в формате {{\"actions\":[...]}} без текста и пояснений."
+    )
+
+    try:
+        actions = await ask_ai(context, profile="code")
+    except Exception as e:
+        await event.reply(f"❌ Ошибка запроса к AI: {e}")
+        return
+
+    # Сохраняем текущий профиль, если есть действие смены имени или юзернейма
+    for action in actions.get("actions", []):
+        if list(action.keys())[0] in ("update_name", "update_username"):
+            save_backup_profile(profile)
+            break
+
+    await execute_actions(event, actions)
+
+    
+    
+    
 @client.on(events.NewMessage(pattern=r'^fr!donate'))
 async def donate_menu(event):
     donate_text = """
@@ -1523,16 +1726,25 @@ async def main():
         await init_bot()
         print(f"\n{license_checker.colors['success']}✅ Бот успешно запущен")
         print(f"ID аккаунта: {OWNER_USER_ID}{license_checker.colors['reset']}\n")
-        
+
+        # Первая проверка лицензии при старте
+        is_valid = await license_checker.check_license(OWNER_USER_ID)
+        if not is_valid:
+            print("❌ Лицензия не подтверждена. Выход...")
+            return
+
+        # Регулярная проверка лицензии раз в 5 минут
         while True:
-            await asyncio.sleep(1)
-            
-    except KeyboardInterrupt:
-        print("\nЗавершение работы...")
+            await asyncio.sleep(300)  # 300 секунд = 5 минут
+            is_valid = await license_checker.check_license(OWNER_USER_ID)
+            if not is_valid:
+                print("❌ Лицензия перестала быть действительной. Останавливаю бота.")
+                # Здесь можно добавить код остановки или выхода
+                return
+
     except Exception as e:
-        print(f"\n{license_checker.colors['error']}❌ Критическая ошибка: {e}")
-    finally:
-        await client.disconnect()
+        print(f"⚠️ Ошибка в главном цикле: {e}")
+
 
 if __name__ == '__main__':
     client.loop.run_until_complete(main())

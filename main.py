@@ -1248,7 +1248,8 @@ async def help_handler(event):
         "`fr!байтстоп` — Отключить байт\n\n"
 
         "**🧠 ИИ:**\n"
-        "`fr!AI <вопрос>` — Ответ от AI (если включено)\n\n"
+        "`fr!AI <вопрос>` — Ответ от AI (если включено)\n"
+        "`fr!ArtI - Прокомментировать\n\n"
 
         "**👨‍💻 Dev/admin (для владельца):**\n"
         "`fr!admin` — Настройки админов\n"
@@ -1433,6 +1434,8 @@ async def ask_ai(message: str, profile: str = "code") -> dict:
         "profile": profile,
         "message": message
     }, ensure_ascii=False)
+    
+    print(f"Отправляем нейросети: {json_data}")
 
     cmd = [
         "curl",
@@ -1457,7 +1460,9 @@ async def ask_ai(message: str, profile: str = "code") -> dict:
 
     # --- Отладочный вывод ---
     print(f"DEBUG raw_response: {raw_response}")
-
+    
+    raw_response = raw_response.replace("'", '"')
+    
     try:
         data = json.loads(raw_response)
     except json.JSONDecodeError as e:
@@ -1488,8 +1493,7 @@ async def ask_ai(message: str, profile: str = "code") -> dict:
 async def get_user_profile(client, user_id):
     full = await client(functions.users.GetFullUserRequest(user_id))
     user = full.user if hasattr(full, 'user') else None
-    bio = getattr(full, "about", "") or ""
-
+    bio = getattr(full, "about", "") or ""  # Получаем био
     profile = {
         "username": getattr(user, "username", "") if user else "",
         "first_name": getattr(user, "first_name", "") if user else "",
@@ -1497,6 +1501,7 @@ async def get_user_profile(client, user_id):
         "bio": bio,
     }
     return profile
+
 
 async def get_chat_history(client, chat_id, limit=20):
     messages = []
@@ -1509,184 +1514,345 @@ async def get_chat_history(client, chat_id, limit=20):
     return "\n".join(messages)
 
 
+import json
+import logging
+
+# Настроим логирование
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+
+
+
+import json
+import logging
+from telethon import events, functions
+
+# Логирование
+logging.basicConfig(level=logging.DEBUG)
+
+
+# Путь к логам
+LOG_FILE = 'change_logs.txt'
+BACKUP_FILE = 'backup_profile.json'
+
+# Логирование изменений
+def log_change(action_type, details):
+    with open(LOG_FILE, 'a', encoding='utf-8') as f:
+        f.write(f"{action_type}: {details}\n")
+
+def clear_log():
+    with open(LOG_FILE, 'w', encoding='utf-8') as f:
+        f.write("")  # Очистка файла
+
+# Сохранение и загрузка профиля
+def save_backup_profile(profile):
+    with open(BACKUP_FILE, 'w', encoding='utf-8') as f:
+        json.dump(profile, f, ensure_ascii=False, indent=2)
+
+def load_backup_profile():
+    if not os.path.exists(BACKUP_FILE):
+        return None
+    with open(BACKUP_FILE, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+# Константы для API
+MODEL_NAME = "jamba-large"  # Название модели
+API_URL = "https://fenst4r.life/api/ai_v2"  # URL для API
+
+# Обработка запроса к нейросети
+async def ask_ai(message: str, profile: str = "code") -> dict:
+    import subprocess
+
+    json_data = json.dumps({
+        "model": MODEL_NAME,
+        "profile": profile,
+        "message": message
+    }, ensure_ascii=False)
+
+    cmd = [
+        "curl",
+        "-s",
+        "-X", "POST",
+        API_URL,
+        "-H", "Content-Type: application/json",
+        "-d", json_data
+    ]
+
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    stdout, stderr = await proc.communicate()
+
+    if proc.returncode != 0:
+        raise RuntimeError(f"Ошибка curl: {stderr.decode().strip()}")
+
+    raw_response = stdout.decode('utf-8')
+    print(f"DEBUG raw_response: {raw_response}")
+
+    try:
+        data = json.loads(raw_response)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Ошибка парсинга JSON от AI: {e}\nОтвет: {raw_response}")
+
+    if "reply" in data:
+        raw_reply = data["reply"].strip()
+    elif "choices" in data:
+        raw_reply = data["choices"][0]["message"]["content"].strip()
+    else:
+        raise ValueError(f"В ответе от AI нет ключей 'reply' или 'choices'. Ответ: {raw_response}")
+
+    # Попробуем очистить строку и вернуть валидный JSON
+    start = raw_reply.find('{')
+    end = raw_reply.rfind('}') + 1
+    if start == -1 or end == -1:
+        raise ValueError(f"Ответ AI не содержит валидный JSON: {raw_reply}")
+
+    clean_json_str = raw_reply[start:end]
+
+    try:
+        actions_json = json.loads(clean_json_str)
+        return actions_json
+    except json.JSONDecodeError:
+        raise ValueError(f"Ответ AI не является валидным JSON после очистки: {clean_json_str}")
+
 async def execute_actions(event, actions):
     results = []  # Инициализация списка результатов
-    print(f"DEBUG actions: {json.dumps(actions, ensure_ascii=False, indent=2)}")  # Логируем входные данные
+    logging.debug(f"DEBUG actions: {json.dumps(actions, ensure_ascii=False, indent=2)}")  # Логируем входные данные
+
+    def log_and_add_result(action_type, result, message):
+        log_change(action_type, message)
+    
+    def check_params(action_type, required_params, params):
+        for param in required_params:
+            if param not in params:
+                results.append(f"⚠️ Не указан параметр '{param}' для действия {action_type}.")
+                logging.warning(f"Не указан параметр '{param}' для действия {action_type}.")
+                return False
+        return True
 
     for action in actions.get("actions", []):
         if not isinstance(action, dict) or len(action) != 1:
             results.append(f"⚠️ Некорректный формат действия: {action}")
+            logging.warning(f"Некорректный формат действия: {action}")
             continue
         
         action_type = list(action.keys())[0]
         params = action[action_type]
 
         try:
-            if action_type == "edit_message":
-                if "message_id" not in params or "text" not in params:
-                    results.append("⚠️ Не указаны параметры для редактирования сообщения.")
-                    continue
-                await event.client.edit_message(event.chat_id, params["message_id"], params["text"])
-                results.append(f"✅ Отредактировано сообщение {params['message_id']}")
-
-            elif action_type == "send_message":
-                if "text" not in params:
-                    results.append("⚠️ Не указан текст для отправки сообщения.")
+            if action_type == "send_message":
+                if not check_params(action_type, ["text"], params):
                     continue
                 sent = await event.client.send_message(event.chat_id, params["text"])
-                results.append(f"✅ Отправлено сообщение: {sent.id}")
 
             elif action_type == "reply":
-                if "message_id" not in params or "text" not in params:
-                    results.append("⚠️ Не указаны параметры для ответа на сообщение.")
+                if not check_params(action_type, ["message_id", "text"], params):
                     continue
                 await event.client.send_message(event.chat_id, params["text"], reply_to=params["message_id"])
-                results.append(f"✅ Отправлен ответ на сообщение {params['message_id']}")
+
+            elif action_type == "edit_message":
+                if not check_params(action_type, ["message_id", "text"], params):
+                    continue
+                await event.client.edit_message(event.chat_id, params["message_id"], params["text"])
 
             elif action_type == "delete_message":
-                if "message_id" not in params:
-                    results.append("⚠️ Не указан ID сообщения для удаления.")
+                if not check_params(action_type, ["message_id"], params):
                     continue
                 await event.client.delete_messages(event.chat_id, params["message_id"])
-                results.append(f"✅ Удалено сообщение {params['message_id']}")
+
+            elif action_type == "send_file":
+                if not check_params(action_type, ["file"], params):
+                    continue
+                await event.client.send_file(event.chat_id, params["file"])
+
+            elif action_type == "kick_user":
+                if not check_params(action_type, ["user_id"], params):
+                    continue
+                await event.client.kick_participant(event.chat_id, params["user_id"])
+
+            elif action_type == "unban_user":
+                if not check_params(action_type, ["user_id"], params):
+                    continue
+                await event.client.unban_participant(event.chat_id, params["user_id"])
 
             elif action_type == "pin_message":
-                if "message_id" not in params:
-                    results.append("⚠️ Не указан ID сообщения для закрепления.")
+                if not check_params(action_type, ["message_id"], params):
                     continue
                 await event.client.pin_message(event.chat_id, params["message_id"])
-                results.append(f"✅ Закреплено сообщение {params['message_id']}")
 
             elif action_type == "unpin_message":
-                await event.client.unpin_message(event.chat_id)
-                results.append(f"✅ Откреплено сообщение")
-
-            elif action_type == "update_bio":
-                if "text" not in params:
-                    results.append("⚠️ Не указано текстовое описание для био.")
+                if not check_params(action_type, ["message_id"], params):
                     continue
-                await event.client(functions.account.UpdateProfileRequest(about=params["text"]))
-                results.append(f"✅ Обновлено био")
+                await event.client.unpin_message(event.chat_id, params["message_id"])
 
-            elif action_type == "update_username":
-                if "username" not in params:
-                    results.append("⚠️ Не указан новый юзернейм.")
+            elif action_type == "add_participant":
+                if not check_params(action_type, ["user_id"], params):
                     continue
-                await event.client(functions.account.UpdateUsernameRequest(username=params["username"]))
-                results.append(f"✅ Обновлен юзернейм на {params['username']}")
+                await event.client.add_participant(event.chat_id, params["user_id"])
 
-            elif action_type == "update_name":
-                # Если update_name приходит как строка, разделяем её на имя и фамилию
-                if isinstance(params, str):
-                    name_parts = params.split(" | ")
-                    first_name = name_parts[0]  # Имя (до разделителя)
-                    last_name = name_parts[1] if len(name_parts) > 1 else ""  # Фамилия (после разделителя)
-                elif isinstance(params, dict):
-                    first_name = params.get("first_name", "")
-                    last_name = params.get("last_name", "")
-                else:
-                    results.append("⚠️ Некорректный формат данных для обновления имени.")
+            elif action_type == "block_user":
+                if not check_params(action_type, ["user_id"], params):
                     continue
+                await event.client.block_user(params["user_id"])
 
-                # Обновление имени и фамилии
-                await event.client(functions.account.UpdateProfileRequest(
-                    first_name=first_name,
-                    last_name=last_name
-                ))
-                results.append(f"✅ Обновлены имя/фамилия: {first_name} {last_name}")
-
-            elif action_type == "send_photo":
-                if "file" not in params:
-                    results.append("⚠️ Не указан файл для отправки.")
+            elif action_type == "unblock_user":
+                if not check_params(action_type, ["user_id"], params):
                     continue
-                await event.client.send_file(event.chat_id, params["file"], caption=params.get("caption"))
-                results.append(f"✅ Отправлена фотография")
+                await event.client.unblock_user(params["user_id"])
 
-            elif action_type == "change_chat_title":
-                if "title" not in params:
-                    results.append("⚠️ Не указано новое название чата.")
+            elif action_type == "get_chat_info":
+                chat_info = await event.client.get_entity(event.chat_id)
+                results.append(f"📝 Информация о чате: {chat_info.title} (ID: {chat_info.id})")
+
+            elif action_type == "get_user_info":
+                if not check_params(action_type, ["user_id"], params):
                     continue
-                await event.client(functions.channels.EditTitleRequest(
-                    channel=event.chat_id,
-                    title=params["title"]
-                ))
-                results.append(f"✅ Изменено название чата на «{params['title']}»")
+                user_info = await event.client.get_entity(params["user_id"])
+                results.append(f"📝 Информация о пользователе: {user_info.username} (ID: {user_info.id})")
+
+            elif action_type == "get_messages":
+                if not check_params(action_type, ["limit"], params):
+                    continue
+                messages = await event.client.get_messages(event.chat_id, limit=params["limit"])
+                for msg in messages:
+                    results.append(f"📩 Сообщение: {msg.text} (ID: {msg.id})")
+
+            elif action_type == "send_poll":
+                if not check_params(action_type, ["question", "options"], params):
+                    continue
+                poll = await event.client.send_poll(event.chat_id, params["question"], params["options"], is_anonymous=True)
+                results.append(f"🗳️ Опрос отправлен: {poll.id}")
+
+            elif action_type == "delete_chat":
+                await event.client.delete_chat(event.chat_id)
+
+            elif action_type == "set_title":
+                if not check_params(action_type, ["title"], params):
+                    continue
+                await event.client.edit_chat(event.chat_id, title=params["title"])
+
+            elif action_type == "add_admin":
+                if not check_params(action_type, ["user_id"], params):
+                    continue
+                await event.client.edit_admin(event.chat_id, params["user_id"], is_admin=True)
+
+            elif action_type == "remove_admin":
+                if not check_params(action_type, ["user_id"], params):
+                    continue
+                await event.client.edit_admin(event.chat_id, params["user_id"], is_admin=False)
+
+            elif action_type == "send_sticker":
+                if not check_params(action_type, ["sticker"], params):
+                    continue
+                await event.client.send_sticker(event.chat_id, params["sticker"])
+
+            elif action_type == "forward_message":
+                if not check_params(action_type, ["message_id", "to_chat"], params):
+                    continue
+                await event.client.forward_messages(params["to_chat"], event.chat_id, params["message_id"])
+
+            elif action_type == "edit_username":
+                if not check_params(action_type, ["username"], params):
+                    continue
+                await event.client.edit_profile(username=params["username"])
 
             else:
                 results.append(f"⚠️ Неизвестное действие: {action_type}")
+                logging.warning(f"Неизвестное действие: {action_type}")
 
         except Exception as exc:
-            # Логируем ошибки и добавляем их в результат
-            print(f"DEBUG Ошибка при выполнении действия {action_type}: {exc}")
+            logging.error(f"Ошибка при выполнении действия {action_type}: {exc}")
             results.append(f"❌ Ошибка выполнения действия {action_type}: {exc}")
 
     if results:
         await event.reply("\n".join(results))  # Отправляем ответ с результатами
 
 
-
-
+# Пример хендлера для команды fr!AI
 @client.on(events.NewMessage(pattern=r'^fr!AI(?: (.+))?$'))
 async def fr_ai_handler(event):
     user_message = event.pattern_match.group(1) or "Привет, что сделать?"
-
+    
     # Заменяем реальные переводы строк на символы \n для передачи в нейросеть
     user_message = user_message.replace('\n', '\\n')
 
+    # Получаем актуальный профиль пользователя
     profile = await get_user_profile(event.client, event.sender_id)
+
+    # Собираем информацию для контекста: имя, фамилию, био
+    user_bio = profile["bio"]
+    user_first_name = profile["first_name"]
+    user_last_name = profile["last_name"]
+    user_username = profile["username"]
+
+    # История чатов (по желанию можно добавлять в контекст)
     history_text = await get_chat_history(event.client, event.chat_id)
 
-    if user_message.strip().lower() in ("верни", "отмени", "откатись"):
-        backup = load_backup_profile()
-        if backup:
-            actions = {"actions": []}
-            if backup.get("first_name") or backup.get("last_name"):
-                actions["actions"].append({
-                    "update_name": {
-                        "first_name": backup.get("first_name", ""),
-                        "last_name": backup.get("last_name", "")
-                    }
-                })
-            if backup.get("username"):
-                actions["actions"].append({
-                    "update_username": {
-                        "username": backup.get("username", "")
-                    }
-                })
-            await execute_actions(event, actions)
-        else:
-            await event.reply("⚠️ Нет сохранённых данных для восстановления.")
-        return
-
-    context = (
-        f"Профиль пользователя:\n"
-        f"Username: {profile['username']}\n"
-        f"Имя: {profile['first_name']} {profile['last_name']}\n"
-        f"Био: {profile['bio']}\n"
-        f"История последних сообщений в чате:\n"
-        f"{history_text}\n"
-        f"Запрос от пользователя: {user_message}\n"
-        f"Ты — NEIROST4R, помощник для управления Telegram через юзербота. "
-        f"Возвращай только JSON с действиями (edit_message, send_message, reply, delete_message, pin_message, unpin_message, update_bio, update_username, update_name, send_photo, change_chat_title) в формате {{\"actions\":[...]}} без текста и пояснений."
-    )
+    # Формируем контекст для нейросети
+    context = f"История изменений профиля: {load_backup_profile()}\nЗапрос от пользователя: {user_message}\nДанные пользователя: Имя: {user_first_name} Фамилия: {user_last_name} Био: {user_bio} Юзернейм: {user_username}"
 
     try:
-        actions = await ask_ai(context, profile="code")
+        actions = await ask_ai(context)  # Отправляем запрос с контекстом
+        await execute_actions(event, actions)  # Выполняем действия на основе ответа
     except Exception as e:
         await event.reply(f"❌ Ошибка запроса к AI: {e}")
         return
 
-    # Сохраняем текущий профиль, если есть действие смены имени или юзернейма
-    for action in actions.get("actions", []):
-        if list(action.keys())[0] in ("update_name", "update_username"):
-            save_backup_profile(profile)
-            break
+# Функция для получения последних сообщений
+async def get_chat_history(client, chat_id, limit=5):
+    messages = await client.get_messages(chat_id, limit=limit)
+    return "\n".join([msg.text for msg in messages])
 
-    await execute_actions(event, actions)
+# Обработчик команды fr!AI
+@client.on(events.NewMessage(pattern=r'^fr!ArtI(?: (.+))?$'))
+async def fr_ai_handler(event):
+    user_message = event.pattern_match.group(1) or "Что сделать?"
 
-    
-    
-    
+    # Получаем последние 5 сообщений чата
+    history_text = await get_chat_history(event.client, event.chat_id, limit=5)
+
+    # Формируем контекст для нейросети
+    context = f"История сообщений:\n{history_text}\nЗапрос от пользователя: {user_message}"
+
+    try:
+        actions = await ask_ai(context)  # Отправляем запрос с контекстом
+        await execute_actions(event, actions)  # Выполняем действия на основе ответа
+    except Exception as e:
+        await event.reply(f"❌ Ошибка запроса к AI: {e}")
+        return
+        
+# Функция для получения профиля пользователя
+async def get_user_profile(client, user_id):
+    full = await client(functions.users.GetFullUserRequest(user_id))
+
+    # Получаем данные о пользователе
+    user = full.users[0] if full.users else None
+    bio = getattr(user, "about", "") or "Био не указано"
+    first_name = getattr(user, "first_name", "Имя не указано")
+    last_name = getattr(user, "last_name", "Фамилия не указана")
+    username = getattr(user, "username", "Юзернейм не указан")
+
+    # Собираем информацию в строку
+    user_info = f"Имя: {first_name} {last_name}\nЮзернейм: {username}\nБио: {bio}"
+
+    logging.debug(f"User Info: {user_info}")
+
+    # Возвращаем профиль в виде словаря
+    profile = {
+        "bio": bio,
+        "first_name": first_name,
+        "last_name": last_name,
+        "username": username,
+        "user_info": user_info  # Собранная строка
+    }
+    return profile
+
+
+
+
+
 @client.on(events.NewMessage(pattern=r'^fr!donate'))
 async def donate_menu(event):
     donate_text = """

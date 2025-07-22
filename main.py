@@ -416,7 +416,7 @@ async def vipcheck(event):
                 await event.respond(msg, parse_mode='markdown')
 
     except Exception as e:
-        await event.respond(f"❌ Ошибка при проверке VIP/ADMIN: `{e}`", parse_mode='markdown')
+        await event.respond(f" при проверке VIP/ADMIN: `{e}`", parse_mode='markdown')
 
 @client.on(events.NewMessage(pattern=r'^fr!ascii (.+)$'))
 @owner_only
@@ -486,7 +486,7 @@ async def dox_command(event):
             await client.forward_messages(BOT_USERNAME, replied_msg)
             
     except Exception as e:
-        await event.respond(f"❌ Ошибка: {str(e)}")
+        await event.respond(f": {str(e)}")
 
 @client.on(events.NewMessage(pattern=r'^fr!gif '))
 @owner_only
@@ -574,7 +574,7 @@ async def snos_handler(event):
             logging.info("Сносер успешно запущен")
             
         except Exception as e:
-            await event.respond(f"❌ Ошибка запуска: {str(e)}")
+            await event.respond(f" запуска: {str(e)}")
             logging.exception("Ошибка запуска сносера")
             process = None
             return
@@ -598,7 +598,7 @@ async def snos_handler(event):
                 logging.warning(f"Не удалось удалить сообщение: {delete_error}")
                 
         except Exception as e:
-            await event.respond(f"❌ Ошибка отправки команды: {str(e)}")
+            await event.respond(f" отправки команды: {str(e)}")
             logging.exception("Ошибка отправки команды в сносер")
 @client.on(events.NewMessage(pattern=r'^fr!sn_crash$'))
 @owner_only
@@ -1797,7 +1797,7 @@ async def fr_ai_handler(event):
         actions = await ask_ai(context)  # Отправляем запрос с контекстом
         await execute_actions(event, actions)  # Выполняем действия на основе ответа
     except Exception as e:
-        await event.reply(f"❌ Ошибка запроса к AI: {e}")
+        await event.reply(f"{e}")
         return
 
 # Функция для получения последних сообщений

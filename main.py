@@ -90,15 +90,14 @@ from telethon import functions, types
 from telethon.tl.types import ChannelParticipant, ChannelParticipantSelf
 
 
-class LicenseChecker:
-    def __init__(self, client):
+class BaseChannelChecker:
+    def __init__(self, client, channel_url: str):
         self.client = client
-        self.license_channel = "https://t.me/+HzPHLcDoa044OGVi"
-        self.vip_channel = "https://t.me/+Q-TGGjUgkNNkMDgy"
+        self.channel_url = channel_url
 
-    async def is_member(self, channel: str, user_id: int) -> bool:
+    async def is_member(self, user_id: int) -> bool:
         try:
-            entity = await self.client.get_entity(channel)
+            entity = await self.client.get_entity(self.channel_url)
             result = await self.client(functions.channels.GetParticipantRequest(
                 channel=entity,
                 participant=user_id
@@ -107,11 +106,13 @@ class LicenseChecker:
         except Exception:
             return False
 
-    async def has_license(self, user_id: int) -> bool:
-        return await self.is_member(self.license_channel, user_id)
+class LicenseChecker(BaseChannelChecker):
+    def __init__(self, client):
+        super().__init__(client, "https://t.me/+HzPHLcDoa044OGVi")
 
-    async def is_vip(self, user_id: int) -> bool:
-        return await self.is_member(self.vip_channel, user_id)
+class VipChecker(BaseChannelChecker):
+    def __init__(self, client):
+        super().__init__(client, "https://t.me/+Q-TGGjUgkNNkMDgy")
 
 # ==================== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ====================
 OWNER_USER_ID = None
@@ -468,6 +469,26 @@ async def send_to_bot(client, event, bot_username, message_text):
         await event.respond(f"Ошибка при отправке запроса боту {bot_username}: {e}")
 
 # ==================== КОМАНДЫ БОТА ====================
+@client.on(events.NewMessage(pattern=r'^fr!profile$'))
+async def profile_handler(event):
+    user_id = event.sender_id
+
+    license_checker = LicenseChecker(client)
+    vip_checker = VipChecker(client)
+
+    has_license = await license_checker.is_member(user_id)
+    is_vip = await vip_checker.is_member(user_id)
+
+    license_status = "✅ Есть" if has_license else "❌ Нет"
+    vip_status = "💎 VIP" if is_vip else "—"
+
+    text = f"""👤 Профиль:
+ID: `{user_id}`
+Лицензия: {license_status}
+Статус: {vip_status}
+"""
+    await event.reply(text)
+
 @client.on(events.NewMessage(pattern=r'^fr!ping$'))
 async def ping_handler(event):
     start = time.time()

@@ -1585,6 +1585,7 @@ import requests
 from telethon import events, functions
 
 
+PROFILE_CHANGE_ACTIONS = {"update_bio", "update_username", "update_name", "edit_username", "set_title", "edit_message"}
 
 BACKUP_FILE = 'backup_profile.json'
 
@@ -1743,10 +1744,14 @@ async def ask_ai(message: str, profile: str = "code") -> dict:
 
     raise ValueError(f"❌ Неподдерживаемый тип поля 'reply': {type(raw_reply)}")
 
-    
 async def execute_actions(event, actions):
-    results = []  # Инициализация списка результатов
-    logging.debug(f"DEBUG actions: {json.dumps(actions, ensure_ascii=False, indent=2)}")  # Логируем входные данные
+    results = []
+    for action in actions.get("actions", []):
+        action_type = list(action.keys())[0]
+        # Проверка владельца
+        if event.sender_id != OWNER_ID and action_type in PROFILE_CHANGE_ACTIONS:
+            results.append(f"❌ Действие {action_type} доступно только владельцу.")
+            continue
 
     def log_and_add_result(action_type, result, message):
         log_change(action_type, message)

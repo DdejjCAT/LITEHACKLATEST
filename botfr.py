@@ -173,7 +173,7 @@ def show_online_readme():
         if len(readme_text) > max_length:
             readme_text = readme_text[:max_length] + "\n\n... (обрезано)"
 
-        message_dialog(title="📘 README с GitHub", text=readme_text, style=style).run()
+        message_dialog(title="📘 Инструкция", text=readme_text, style=style).run()
 
     except Exception as e:
         message_dialog(title="❌ Ошибка", text=f"Не удалось загрузить README.md:\n{e}", style=style).run()

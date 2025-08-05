@@ -144,20 +144,22 @@ def install_addons():
             for f in z.namelist():
                 print(" -", f)
 
-            # Очистка папки addons
             if os.path.exists(local_addons_dir):
                 print(f"Удаляем существующую папку {local_addons_dir}")
                 shutil.rmtree(local_addons_dir)
             os.makedirs(local_addons_dir, exist_ok=True)
             print(f"Создали папку {local_addons_dir}")
 
-            copied_files = 0
             prefix = "LITEHACKADDONS-main/"
+            copied_files = 0
 
             for file in z.namelist():
-                # Проверяем, что файл в нужной папке и это .py файл, и что это не папка
+                print(f"Проверяем файл: '{file}'")
+                print(f"startswith('{prefix}') = {file.startswith(prefix)}")
+                print(f"endswith('.py') = {file.endswith('.py')}")
+                print(f"endswith('/') = {file.endswith('/')}")
                 if file.startswith(prefix) and file.endswith(".py") and not file.endswith("/"):
-                    filename = file[len(prefix):]  # убираем префикс папки
+                    filename = file[len(prefix):]
                     target_path = os.path.join(local_addons_dir, filename)
                     print(f"Копируем файл {file} -> {target_path}")
                     with z.open(file) as source, open(target_path, "wb") as target:

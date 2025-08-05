@@ -17,10 +17,27 @@ OPTIONS_FILE = "config.txt"
 MAIN_PY = "main.py"
 
 REQUIREMENTS = [
-    "telethon", "aiohttp", "termcolor", "cfonts", "pyfiglet",
-    "cryptography", "yt_dlp", "Pillow", "numpy", "beautifulsoup4",
-    "aiogram", "colored", "pystyle", "selenium", "art", "text2art",
-    "transformers", "llama-cpp-python", "torch", "tensorflow", "requests"
+    "telethon",
+    "aiohttp",
+    "termcolor",
+    "cfonts",
+    "pyfiglet",
+    "cryptography",
+    "yt_dlp",
+    "Pillow",
+    "numpy",
+    "beautifulsoup4",
+    "aiogram",
+    "colored",
+    "pystyle",
+    "selenium",
+    "art",
+    "text2art",
+    "transformers",
+    "llama-cpp-python",
+    "torch",
+    "tensorflow",
+    "requests"
 ]
 
 style = Style.from_dict({

@@ -134,25 +134,38 @@ def install_addons():
     local_addons_dir = "addons"
 
     try:
+        print("Скачиваем архив...")
         resp = requests.get(repo_zip_url)
         resp.raise_for_status()
         zip_bytes = io.BytesIO(resp.content)
 
         with zipfile.ZipFile(zip_bytes) as z:
+            print("Файлы в архиве:")
+            for f in z.namelist():
+                print(" -", f)
+
             # Очистка папки addons
             if os.path.exists(local_addons_dir):
+                print(f"Удаляем существующую папку {local_addons_dir}")
                 shutil.rmtree(local_addons_dir)
             os.makedirs(local_addons_dir, exist_ok=True)
-        
+            print(f"Создали папку {local_addons_dir}")
+
+            copied_files = 0
             for file in z.namelist():
                 if '/' not in file and file.endswith('.py'):
                     target_path = os.path.join(local_addons_dir, file)
+                    print(f"Копируем файл {file} -> {target_path}")
                     with z.open(file) as source, open(target_path, 'wb') as target:
                         shutil.copyfileobj(source, target)
+                    copied_files += 1
 
-        message_dialog(title="✅ Аддоны", text="Аддоны успешно установлены из ветки addons!", style=style).run()
+            print(f"Всего скопировано файлов: {copied_files}")
+
+        print("✅ Аддоны успешно установлены из ветки addons!")
     except Exception as e:
-        message_dialog(title="❌ Ошибка", text=f"Не удалось установить аддоны:\n{e}", style=style).run()
+        print(f"❌ Ошибка при установке аддонов: {e}")
+
 
 def show_online_readme():
     url = "https://raw.githubusercontent.com/DdejjCAT/LITEHACKLATEST/main/README.md"

@@ -143,15 +143,11 @@ def install_addons():
             if os.path.exists(local_addons_dir):
                 shutil.rmtree(local_addons_dir)
             os.makedirs(local_addons_dir, exist_ok=True)
-
+        
             for file in z.namelist():
-                # Файлы в корне архива addons ветки, без вложенных папок
-                # Пример: LITEHACKLATEST-addons/ivi.py
-                parts = file.split('/')
-                if len(parts) == 2 and parts[0] == "LITEHACKLATEST-addons" and file.endswith(".py"):
-                    filename = parts[1]
-                    target_path = os.path.join(local_addons_dir, filename)
-                    with z.open(file) as source, open(target_path, "wb") as target:
+                if '/' not in file and file.endswith('.py'):
+                    target_path = os.path.join(local_addons_dir, file)
+                    with z.open(file) as source, open(target_path, 'wb') as target:
                         shutil.copyfileobj(source, target)
 
         message_dialog(title="✅ Аддоны", text="Аддоны успешно установлены из ветки addons!", style=style).run()
@@ -173,7 +169,7 @@ def show_online_readme():
         if len(readme_text) > max_length:
             readme_text = readme_text[:max_length] + "\n\n... (обрезано)"
 
-        message_dialog(title="📘 Инструкция", text=readme_text, style=style).run()
+        message_dialog(title="📘 README с GitHub", text=readme_text, style=style).run()
 
     except Exception as e:
         message_dialog(title="❌ Ошибка", text=f"Не удалось загрузить README.md:\n{e}", style=style).run()

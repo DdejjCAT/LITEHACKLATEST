@@ -86,96 +86,33 @@ import aiohttp
 import asyncio
 from datetime import datetime, timezone
 
+from telethon import functions, types
+from telethon.tl.types import ChannelParticipant, ChannelParticipantSelf
+
+
 class LicenseChecker:
-    def __init__(self):
-        self.license_url = "https://fenst4r.life/api/check_license"
-        self.vip_url = "https://fenst4r.life/api/check_vip"
-        self.colors = {
-            'error': "\033[91m",
-            'success': "\033[92m",
-            'warning': "\033[93m",
-            'info': "\033[94m",
-            'reset': "\033[0m"
-        }
+    def __init__(self, client):
+        self.client = client
+        self.license_channel = "https://t.me/+HzPHLcDoa044OGVi"
+        self.vip_channel = "https://t.me/+Q-TGGjUgkNNkMDgy"
 
-    def get_hwid(self) -> str:
-        import platform, hashlib
-        sys_info = platform.uname()
-        hwid_str = f"{sys_info.system}-{sys_info.node}-{sys_info.release}-{sys_info.machine}"
-        return hashlib.sha256(hwid_str.encode()).hexdigest()
-
-    async def check_license(self, user_id: int) -> bool:
+    async def is_member(self, channel: str, user_id: int) -> bool:
         try:
-            hwid = self.get_hwid()
-    
-            async with aiohttp.ClientSession() as session:
-                params = {"user_id": str(user_id), "hwid": hwid}
-                async with session.get(self.license_url, params=params) as resp:
-                    text = await resp.text()
-    
-                    if resp.status != 200:
-                        print(f"⚠️ Сервер вернул статус {resp.status}")
-                        return False
-    
-                    data = json.loads(text)
-                    return data.get("valid", False)
-    
-        except Exception as e:
+            entity = await self.client.get_entity(channel)
+            result = await self.client(functions.channels.GetParticipantRequest(
+                channel=entity,
+                participant=user_id
+            ))
+            return isinstance(result.participant, (ChannelParticipant, ChannelParticipantSelf))
+        except Exception:
             return False
 
-class VipChecker:
-    def __init__(self, vip_url):
-        self.vip_url = vip_url
+    async def has_license(self, user_id: int) -> bool:
+        return await self.is_member(self.license_channel, user_id)
 
     async def is_vip(self, user_id: int) -> bool:
-        try:
-            async with aiohttp.ClientSession() as session:
-                params = {"user_id": str(user_id)}
-                async with session.get(self.vip_url, params=params) as resp:
-                    if resp.status != 200:
-                        return False
-                    data = await resp.json(content_type=None)
-                    vip = data.get("vip", False)
-                    if not vip:
-                        return False
+        return await self.is_member(self.vip_channel, user_id)
 
-                    expiry_raw = data.get("expiry")
-                    if expiry_raw:
-                        expiry_dt = dateutil.parser.parse(expiry_raw)
-                        if expiry_dt.tzinfo is None:
-                            expiry_dt = expiry_dt.replace(tzinfo=timezone.utc)
-                        now = datetime.now(timezone.utc)
-                        if expiry_dt < now:
-                            return False
-                    else:
-                        return False
-                    return True
-        except Exception as e:
-            print(f"[VIP] Ошибка запроса: {e}")
-            return False
-
-    async def get_vip_expiry(self, user_id: int) -> str:
-        try:
-            async with aiohttp.ClientSession() as session:
-                params = {"user_id": str(user_id)}
-                async with session.get(self.vip_url, params=params) as resp:
-                    if resp.status != 200:
-                        return "Нет данных"
-                    data = await resp.json(content_type=None)
-                    expiry_raw = data.get("expiry")
-                    if not expiry_raw:
-                        return "Неизвестно"
-                    try:
-                        expiry_dt = dateutil.parser.parse(expiry_raw)
-                        if expiry_dt.tzinfo is None:
-                            expiry_dt = expiry_dt.replace(tzinfo=timezone.utc)
-                        return expiry_dt.strftime("%Y-%m-%d %H:%M:%S UTC")
-                    except Exception as e:
-                        print(f"Ошибка при парсинге даты VIP: {e}")
-                        return "Ошибка"
-        except Exception as e:
-            print(f"[VIP] Ошибка запроса: {e}")
-            return "Ошибка"
 # ==================== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ====================
 OWNER_USER_ID = None
 last_vip_status = None

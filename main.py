@@ -240,7 +240,6 @@ async def is_admin(user_id):
 
 # ==================== ИНИЦИАЛИЗАЦИЯ БОТА ====================
 license_checker = LicenseChecker()
-license_checker = LicenseChecker()
 vip_checker = VipChecker(vip_url="https://fenst4r.life/api/check_vip")
 
 async def init_bot():
@@ -619,6 +618,35 @@ async def ascii_art_handler(event):
     ascii_text = Figlet().renderText(text)
     response = f"```\n {ascii_text[:1999]}{'...' if len(ascii_text) > 1999 else ''}\n```"
     await event.respond(response, parse_mode='markdown')
+
+# Загрузка ссылок на оплату
+with open("payment_links.json", "r", encoding="utf-8") as f:
+    payment_links = json.load(f)
+
+@client.on(events.NewMessage(pattern=r'^fr!pay$'))
+async def handler(event):
+    user_id = event.sender_id
+    username = event.sender.username or "неизвестно"
+
+    # Проверка лицензии
+    license_ok = await license_checker.check_license(user_id)
+
+    # Проверка VIP
+    vip_ok = await vip_checker.is_vip(user_id)
+    vip_expiry = await vip_checker.get_vip_expiry(user_id)
+
+    # Формируем сообщение
+    profile_text = f"""👤 Профиль: @{username}
+🛡️ Лицензия: {'✅ Активна' if license_ok else '❌ Неактивна'}
+🌟 VIP: {'✅ до ' + vip_expiry if vip_ok else '❌ Неактивен'}
+
+💵 Оплата лицензии (1 USDT): {payment_links['license']}
+💎 Оплата VIP (2 USDT): {payment_links['vip']}
+
+После оплаты, ты будешь автоматически добавлен в список.
+"""
+
+    await event.respond(profile_text)
 
 @client.on(events.NewMessage(pattern=r'^fr!vip$'))
 async def check_vip_status(event):

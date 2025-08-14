@@ -85,10 +85,8 @@ class BaseChannelChecker:
             participant = await self.client(GetParticipantRequest(entity, user_id))
 
             if isinstance(participant.participant, (ChannelParticipantAdmin, ChannelParticipantCreator)):
-                print("[✅] Пользователь администратор или создатель канала")
                 return True
             elif hasattr(participant.participant, 'date'):
-                print("[✅] Пользователь имеет лицензию")
                 return True
             else:
                 print("[❌] Пользователь не имеет лицензии")

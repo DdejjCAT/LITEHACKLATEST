@@ -68,6 +68,12 @@ def load_config():
         sys.exit(1)
     return config
 
+
+from telethon.tl.functions.channels import GetParticipantRequest
+from telethon.tl.types import ChannelParticipantAdmin, ChannelParticipantCreator
+from telethon.errors.rpcerrorlist import UserNotParticipantError
+
+
 class BaseChannelChecker:
     def __init__(self, client, channel_url):
         self.client = client
@@ -79,9 +85,8 @@ class BaseChannelChecker:
             entity = await self.client.get_entity(self.channel_url)
             participant = await self.client(GetParticipantRequest(entity, user_id))
 
-            # Проверяем тип участника
             if isinstance(participant.participant, (ChannelParticipantAdmin, ChannelParticipantCreator)):
-                print("[✅] Пользователь администратор или создатель")
+                print("[✅] Пользователь администратор или создатель канала")
                 return True
             elif hasattr(participant.participant, 'date'):
                 print("[✅] Пользователь является участником канала")
@@ -89,49 +94,23 @@ class BaseChannelChecker:
             else:
                 print("[❌] Пользователь не состоит в канале")
                 return False
+
+        except UserNotParticipantError:
+            print("[❌] Пользователь не состоит в канале (UserNotParticipantError)")
+            return False
         except Exception as e:
             print(f"[⚠] Ошибка при проверке: {e}")
             return False
 
 
-
 class LicenseChecker(BaseChannelChecker):
-    def __init__(self, client):
-        super().__init__(client, "https://t.me/+HzPHLcDoa044OGVi")
-
     async def check_license(self, user_id: int) -> bool:
-        print(f"[🔍] Запуск проверки лицензии для пользователя {user_id}")
-        result = await self.is_member(user_id)
-        if result:
-            print("[✅] Лицензия подтверждена — пользователь найден в канале")
-        else:
-            print("[❌] Лицензия отклонена — пользователь не найден в канале или ошибка API")
-        return result
-
-
+        return await self.is_member(user_id)
 
 
 class VipChecker(BaseChannelChecker):
-    def __init__(self, client):
-        # фиксированная ссылка на VIP канал
-        super().__init__(client, "https://t.me/+Q-TGGjUgkNNkMDgy")
-
-    async def is_member(self, user_id: int) -> bool:
-        try:
-            # если приватный канал с +, используем Invite
-            if self.channel_url.startswith("+"):
-                hash_code = self.channel_url[1:]
-                entity = await self.client(ImportChatInviteRequest(hash_code))
-            else:
-                entity = await self.client.get_entity(self.channel_url)
-
-            result = await self.client(functions.channels.GetParticipantRequest(
-                channel=entity,
-                participant=user_id
-            ))
-            return isinstance(result.participant, (ChannelParticipant, ChannelParticipantSelf))
-        except Exception:
-            return False
+    async def check_vip(self, user_id: int) -> bool:
+        return await self.is_member(user_id)
         
 config = load_config()
 api_id = int(config.get('api_id', 0))
@@ -208,13 +187,13 @@ async def is_admin(user_id):
 
 # ==================== ИНИЦИАЛИЗАЦИЯ БОТА ====================
 # Правильная инициализация
-license_checker = LicenseChecker(client)
-vip_checker = VipChecker(client)
+license_checker = LicenseChecker(client, "https://t.me/+HzPHLcDoa044OGVi")
+vip_checker = VipChecker(client, "https://t.me/+Q-TGGjUgkNNkMDgy")
 
 async def init_bot():
     # Создаём экземпляры чекеров внутри функции (не обязательно, можно и глобально)
-    license_checker = LicenseChecker(client)
-    vip_checker = VipChecker(client)
+    license_checker = LicenseChecker(client, "https://t.me/+HzPHLcDoa044OGVi")
+    vip_checker = VipChecker(client, "https://t.me/+Q-TGGjUgkNNkMDgy")
 
     if not await license_checker.check_license(OWNER_USER_ID):
         print("❌ Лицензия не подтверждена")
@@ -282,8 +261,8 @@ async def verify_captcha():
 
 
 # ==================== ИНИЦИАЛИЗАЦИЯ БОТА ====================
-license_checker = LicenseChecker(client)
-vip_checker = VipChecker(client)
+license_checker = LicenseChecker(client, "https://t.me/+HzPHLcDoa044OGVi")
+vip_checker = VipChecker(client, "https://t.me/+Q-TGGjUgkNNkMDgy")
 
 async def init_bot():
     # Крашнемся внутри verify_captcha при ошибке, сюда попадём только если капча пройдена
@@ -529,8 +508,8 @@ async def send_to_bot(client, event, bot_username, message_text):
 async def profile_handler(event):
     user_id = event.sender_id
 
-    license_checker = LicenseChecker(client)
-    vip_checker = VipChecker(client)
+    license_checker = LicenseChecker(client, "https://t.me/+HzPHLcDoa044OGVi")
+    vip_checker = VipChecker(client, "https://t.me/+Q-TGGjUgkNNkMDgy")
 
     has_license = await license_checker.is_member(user_id)
     is_vip = await vip_checker.is_member(user_id)

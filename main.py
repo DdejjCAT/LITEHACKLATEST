@@ -77,11 +77,12 @@ class BaseChannelChecker:
         print(f"[ℹ] Проверяю членство: user_id={user_id}, канал={self.channel_url}")
         try:
             member = await self.client.get_chat_member(self.channel_url, user_id)
-            print(f"[✅] Пользователь найден в канале: {member.status}")
-            return True
+            print(f"[📄] Статус в канале: {member.status}")
+            return member.status in ["member", "administrator", "creator"]
         except Exception as e:
-            print(f"[❌] Ошибка или нет в канале: {e}")
+            print(f"[⚠] Ошибка при проверке: {e}")
             return False
+
 
 
 class LicenseChecker(BaseChannelChecker):
@@ -89,13 +90,14 @@ class LicenseChecker(BaseChannelChecker):
         super().__init__(client, "https://t.me/+HzPHLcDoa044OGVi")
 
     async def check_license(self, user_id: int) -> bool:
-        print(f"[🔍] Проверка лицензии для пользователя {user_id}...")
+        print(f"[🔍] Запуск проверки лицензии для пользователя {user_id}")
         result = await self.is_member(user_id)
         if result:
-            print(f"[✅] Лицензия подтверждена (пользователь {user_id} есть в канале).")
+            print("[✅] Лицензия подтверждена — пользователь найден в канале")
         else:
-            print(f"[❌] Лицензия не подтверждена (пользователь {user_id} отсутствует в канале).")
+            print("[❌] Лицензия отклонена — пользователь не найден в канале или ошибка API")
         return result
+
 
 
 

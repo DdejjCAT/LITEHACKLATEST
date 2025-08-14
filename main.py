@@ -92,23 +92,17 @@ class LicenseChecker(BaseChannelChecker):
         # Проверка лицензии только по членству в канале
         return await self.is_member(user_id)
 
-
 class VipChecker(BaseChannelChecker):
-    def __init__(self, client):
-        # Указываем ссылку на VIP-канал
-        super().__init__(client, "https://t.me/+Q-TGGjUgkNNkMDgy")
-
-    async def is_vip(self, user_id: int) -> bool:
+    async def is_member(self, user_id: int) -> bool:
         try:
             # Если ссылка приватная (+abc123)
             if self.channel_url.startswith("+"):
                 hash_code = self.channel_url[1:]
-                from telethon.tl.functions.messages import ImportChatInviteRequest
-                entity = await self.client(ImportChatInviteRequest(hash_code))
+                entity = await client(ImportChatInviteRequest(hash_code))
             else:
-                entity = await self.client.get_entity(self.channel_url)
-
-            result = await self.client(functions.channels.GetParticipantRequest(
+                entity = await client.get_entity(self.channel_url)
+            
+            result = await client(functions.channels.GetParticipantRequest(
                 channel=entity,
                 participant=user_id
             ))
@@ -191,13 +185,13 @@ async def is_admin(user_id):
 
 # ==================== ИНИЦИАЛИЗАЦИЯ БОТА ====================
 # Правильная инициализация
-license_checker = LicenseChecker(client, "https://t.me/+HzPHLcDoa044OGVi")
-vip_checker = VipChecker(client, "https://t.me/+Q-TGGjUgkNNkMDgy")
+license_checker = LicenseChecker(client)
+vip_checker = VipChecker(client)
 
 async def init_bot():
     # Создаём экземпляры чекеров внутри функции (не обязательно, можно и глобально)
-    license_checker = LicenseChecker(client, "https://t.me/+HzPHLcDoa044OGVi")
-    vip_checker = VipChecker(client, "https://t.me/+Q-TGGjUgkNNkMDgy")
+    license_checker = LicenseChecker(client)
+    vip_checker = VipChecker(client)
 
     if not await license_checker.check_license(OWNER_USER_ID):
         print("❌ Лицензия не подтверждена")
@@ -265,8 +259,8 @@ async def verify_captcha():
 
 
 # ==================== ИНИЦИАЛИЗАЦИЯ БОТА ====================
-license_checker = LicenseChecker(client, "https://t.me/+HzPHLcDoa044OGVi")
-vip_checker = VipChecker(client, "https://t.me/+Q-TGGjUgkNNkMDgy")
+license_checker = LicenseChecker(client)
+vip_checker = VipChecker(client)
 
 async def init_bot():
     # Крашнемся внутри verify_captcha при ошибке, сюда попадём только если капча пройдена
@@ -512,8 +506,8 @@ async def send_to_bot(client, event, bot_username, message_text):
 async def profile_handler(event):
     user_id = event.sender_id
 
-    license_checker = LicenseChecker(client, "https://t.me/+HzPHLcDoa044OGVi")
-    vip_checker = VipChecker(client, "https://t.me/+Q-TGGjUgkNNkMDgy")
+    license_checker = LicenseChecker(client)
+    vip_checker = VipChecker(client)
 
     has_license = await license_checker.is_member(user_id)
     is_vip = await vip_checker.is_member(user_id)

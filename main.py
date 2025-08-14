@@ -92,17 +92,23 @@ class LicenseChecker(BaseChannelChecker):
         # Проверка лицензии только по членству в канале
         return await self.is_member(user_id)
 
+
 class VipChecker(BaseChannelChecker):
-    async def is_member(self, user_id: int) -> bool:
+    def __init__(self, client):
+        # Указываем ссылку на VIP-канал
+        super().__init__(client, "https://t.me/+Q-TGGjUgkNNkMDgy")
+
+    async def is_vip(self, user_id: int) -> bool:
         try:
             # Если ссылка приватная (+abc123)
             if self.channel_url.startswith("+"):
                 hash_code = self.channel_url[1:]
-                entity = await client(ImportChatInviteRequest(hash_code))
+                from telethon.tl.functions.messages import ImportChatInviteRequest
+                entity = await self.client(ImportChatInviteRequest(hash_code))
             else:
-                entity = await client.get_entity(self.channel_url)
-            
-            result = await client(functions.channels.GetParticipantRequest(
+                entity = await self.client.get_entity(self.channel_url)
+
+            result = await self.client(functions.channels.GetParticipantRequest(
                 channel=entity,
                 participant=user_id
             ))

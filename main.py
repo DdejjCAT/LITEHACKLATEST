@@ -69,19 +69,18 @@ def load_config():
     return config
 
 class BaseChannelChecker:
-    def __init__(self, client, channel_url: str):
+    def __init__(self, client, channel_url):
         self.client = client
         self.channel_url = channel_url
 
     async def is_member(self, user_id: int) -> bool:
+        print(f"[ℹ] Проверяю членство: user_id={user_id}, канал={self.channel_url}")
         try:
-            entity = await self.client.get_entity(self.channel_url)
-            result = await self.client(functions.channels.GetParticipantRequest(
-                channel=entity,
-                participant=user_id
-            ))
-            return isinstance(result.participant, (ChannelParticipant, ChannelParticipantSelf))
-        except Exception:
+            member = await self.client.get_chat_member(self.channel_url, user_id)
+            print(f"[✅] Пользователь найден в канале: {member.status}")
+            return True
+        except Exception as e:
+            print(f"[❌] Ошибка или нет в канале: {e}")
             return False
 
 

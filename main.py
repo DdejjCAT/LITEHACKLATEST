@@ -82,34 +82,27 @@ class BaseChannelChecker:
             return isinstance(result.participant, (ChannelParticipant, ChannelParticipantSelf))
         except Exception:
             return False
-            
+
 class LicenseChecker(BaseChannelChecker):
     def __init__(self, client):
         super().__init__(client, "https://t.me/+HzPHLcDoa044OGVi")
 
     async def check_license(self, user_id: int) -> bool:
-        """Проверка, есть ли лицензия у пользователя"""
+        # Проверка лицензии только по членству в канале
         return await self.is_member(user_id)
-
-    def get_hwid(self) -> str:
-        """Возвращает хеш HWID устройства"""
-        hwid_raw = str(uuid.getnode()) + str(platform.node())
-        hwid_hash = hashlib.sha256(hwid_raw.encode()).hexdigest()
-        return hwid_hash
 
 class VipChecker(BaseChannelChecker):
     def __init__(self, client):
         super().__init__(client, "https://t.me/+Q-TGGjUgkNNkMDgy")
 
     async def is_vip(self, user_id: int) -> bool:
-        """Проверка VIP-статуса пользователя"""
+        # Проверка VIP только по членству в канале
         return await self.is_member(user_id)
 
     async def get_vip_expiry(self, user_id: int) -> str:
-        """Возвращает дату окончания VIP. Для примера пока пустая строка"""
-        # Можно подключить API или хранить даты в базе
+        # Для примера — бессрочный VIP, если пользователь в канале
         if await self.is_vip(user_id):
-            return "∞"  # Бессрочный VIP
+            return "∞"
         return "нет"
         
 config = load_config()
@@ -190,17 +183,17 @@ license_checker = LicenseChecker(client)
 vip_checker = VipChecker(client)
 
 async def init_bot():
+license_checker = LicenseChecker(client)
+vip_checker = VipChecker(client)
+
     if not await license_checker.check_license(OWNER_USER_ID):
-        print("❌ Лицензия не подтверждена.")
+        print("❌ Лицензия не подтверждена")
         sys.exit(1)
-
-    is_vip = await vip_checker.is_vip(OWNER_USER_ID)
-    vip_expiry = await vip_checker.get_vip_expiry(OWNER_USER_ID)
-
-    if is_vip:
-        print(f"💎 У владельца активен VIP до: {vip_expiry}")
+    
+    if await vip_checker.is_vip(OWNER_USER_ID):
+        print("💎 VIP активен")
     else:
-        print(f"⚠️ У владельца нет VIP.\n⏳ VIP закончился: {vip_expiry}")
+        print("⚠️ VIP не активен")
 
 async def verify_captcha():
     async with aiohttp.ClientSession() as session:

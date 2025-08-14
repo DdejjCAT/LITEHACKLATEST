@@ -392,11 +392,13 @@ def get_lol_quote():
         "Сопли вкуснее с горчицей",
         "Я пожалел что не посолил математичку перед тем, как её съесть",
         "Лучше иметь друга, чем друг-друга",
-        "У меня не стоит твоя роза в стакане, у тебя не течет из крана вода..."
+        "У меня не стоит твоя роза в стакане, у тебя не течет из крана вода...",
+        "ПРЕДСТАВИЛИ ЕБАЛО УЧИТЕЛЯ ПО ИНФОРМАТИКЕ? =)))",
+        "Now Java... Сука я сам не ебу чесн"
     ])
 
 def print_ascii_titles():
-    for text in ['LiteHack', 'V20']:
+    for text in ['LiteHack', 'V21']:
         output = render(text, colors=['green'], align='center')
         print(output)
 
@@ -1580,7 +1582,7 @@ async def info_message(event):
     info_message = (
         "LiteHack by @error_kill\n"
         "Относится к проекту EYE CH EVEREN\n"
-        "Версия: RELEASE 20\n\n"
+        "Версия: RELEASE 21\n\n"
         "Создатель/Программист: @error_kill\n"
         "Помощник/Программист: RonZ\n"
         "Тестер: @roskomnadzor333, @SWLGTEAM все кого мучал в лс в чатах командами)\n"
@@ -2029,7 +2031,7 @@ if __name__ == "__main__":
         try:
             clear_screen()
             print_ascii_titles()
-            print(termcolor.colored("ʟɪᴛᴇʜᴀᴄᴋ 20 ʙʏ @error_kill", "green", attrs=["bold"]))
+            print(termcolor.colored("ʟɪᴛᴇʜᴀᴄᴋ 21 ʙʏ @error_kill", "green", attrs=["bold"]))
             show_random_quote()
             print(termcolor.colored("Обновления: fr!AI с gpt-4.1, frCAPTCHA", "green", attrs=["bold"]))
             print(termcolor.colored("Запускаю бота...", "yellow"))

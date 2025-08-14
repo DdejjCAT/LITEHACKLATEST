@@ -87,11 +87,17 @@ class BaseChannelChecker:
 
 class LicenseChecker(BaseChannelChecker):
     def __init__(self, client):
-        # фиксированная ссылка на basic канал
         super().__init__(client, "https://t.me/+HzPHLcDoa044OGVi")
 
     async def check_license(self, user_id: int) -> bool:
-        return await self.is_member(user_id)
+        print(f"[🔍] Проверка лицензии для пользователя {user_id}...")
+        result = await self.is_member(user_id)
+        if result:
+            print(f"[✅] Лицензия подтверждена (пользователь {user_id} есть в канале).")
+        else:
+            print(f"[❌] Лицензия не подтверждена (пользователь {user_id} отсутствует в канале).")
+        return result
+
 
 
 class VipChecker(BaseChannelChecker):

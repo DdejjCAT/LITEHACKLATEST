@@ -1,4 +1,5 @@
 print("Загружаю библиотеки")
+import uuid
 from datetime import datetime, timezone
 import dateutil.parser
 import httpx

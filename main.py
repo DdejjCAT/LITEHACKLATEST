@@ -96,7 +96,7 @@ class BaseChannelChecker:
             print("[❌] Пользователь не имеет лицензии, купить - @error_kill")
             return False
         except Exception as e:
-            print(f"[⚠] Ошибка при проверке: {e}, напишите: @error_kill")
+            print(f"[⚠] Ошибка при проверке: {e}")
             return False
 
 
@@ -623,9 +623,6 @@ if not os.path.exists(payment_file):
 # Загружаем ссылки
 with open(payment_file, "r", encoding="utf-8") as f:
     payment_links = json.load(f)
-
-# Проверка
-print("Загруженные ссылки на оплату:", payment_links)
 
 @client.on(events.NewMessage(pattern=r'^fr!pay$'))
 async def handler(event):

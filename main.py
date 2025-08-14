@@ -86,9 +86,16 @@ class LicenseChecker(BaseChannelChecker):
     def __init__(self, client):
         super().__init__(client, "https://t.me/+HzPHLcDoa044OGVi")
 
+    async def check_license(self, user_id: int) -> bool:
+        # Возвращает True, если пользователь есть в канале лицензий
+        return await self.is_member(user_id)
+
 class VipChecker(BaseChannelChecker):
     def __init__(self, client):
         super().__init__(client, "https://t.me/+Q-TGGjUgkNNkMDgy")
+
+    async def is_vip(self, user_id: int) -> bool:
+        return await self.is_member(user_id)
         
 config = load_config()
 api_id = int(config.get('api_id', 0))

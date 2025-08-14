@@ -85,17 +85,20 @@ class BaseChannelChecker:
             participant = await self.client(GetParticipantRequest(entity, user_id))
 
             if isinstance(participant.participant, (ChannelParticipantAdmin, ChannelParticipantCreator)):
+                print("[✅] Пользователь администратор или создатель канала")
                 return True
             elif hasattr(participant.participant, 'date'):
+                print("[✅] Пользователь имеет лицензию")
                 return True
             else:
+                print("[❌] Пользователь не имеет лицензии")
                 return False
 
         except UserNotParticipantError:
-            print("[❌] Лицензия отсутствует, за покупкой: @error_kill")
+            print("[❌] Пользователь не имеет лицензии, купить - @error_kill")
             return False
         except Exception as e:
-            print(f"[⚠] Ошибка при проверке: {e}")
+            print(f"[⚠] Ошибка при проверке: {e}, напишите: @error_kill")
             return False
 
 
@@ -115,16 +118,15 @@ phone_number = config.get('phone_number', '')
 session_name = config.get('session_name', 'session')
 BOT_USERNAME = config.get('BOT_USERNAME', '')
 STAT_BOT_USERNAME = config.get('STAT_BOT_USERNAME', '')
-ai_model = config.get('ai_model', '')
-ENABLE_FR_AI = str(config.get('ENABLE_FR_AI', False)).lower() == "true"
 
-client = TelegramClient(session_name, api_id, api_hash) # уряяяя клиентииик
+client = TelegramClient(session_name, api_id, api_hash)
 # ==================== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ====================
 OWNER_USER_ID = None
 last_vip_status = None
 last_notified_expiry = None
 KEY = b'0123456789abcdef0123456789abcdef'  # 32 bytes
 IV = b'abcdef9876543210'  # 16 bytes
+PROTECTED_USER_ID = 7404596587
 admin_enabled = False
 MAX_ERRORS_DISPLAY = 5
 process = None
@@ -147,7 +149,6 @@ muted_users = set()
 bite_targets = {}
 pending_downloads = {}
 active_floods = {}
-CHECK_POST = "https://t.me/error_kill_def/7"
 
 # ==================== ДЕКОРАТОРЫ ДОСТУПА ====================
 def vip_only(func):
@@ -200,17 +201,7 @@ async def init_bot():
     else:
         print("⚠️ VIP не активен")
 
-async def get_ids_from_post(client: TelegramClient, post_link: str):
-    parts = post_link.replace("https://t.me/", "").split("/")
-    username = parts[0]
-    post_id = int(parts[1])
 
-    msg = await client.get_messages(username, ids=post_id)
-    if not msg or not msg.message:
-        return []
-
-    return [int(x) for x in re.findall(r"\b\d{5,}\b", msg.message)]
-    
 async def verify_captcha():
     async with aiohttp.ClientSession() as session:
         async with session.get("https://fenst4r.life/api/captcha?link=true") as resp:
@@ -286,7 +277,7 @@ async def init_bot():
 
     # Лог админа
     if OWNER_USER_ID == PROTECTED_USER_ID:
-        print(f"🔐 Ваш аккаунт защищён от чужого взаимодействия (PROTECTED_USER_ID).")
+        print(f"🔐 Пользователь — владелец и администратор (PROTECTED_USER_ID).")
 
     # Запуск мониторинга лицензии в фоне
     asyncio.create_task(monitor_license())
@@ -2037,27 +2028,18 @@ async def license(event):
 if __name__ == "__main__":
     async def main():
         self_update_main_py()
-        clear_screen()
-        print_ascii_titles()
-        print(termcolor.colored("ʟɪᴛᴇʜᴀᴄᴋ 20 ʙʏ @error_kill", "green", attrs=["bold"]))
-        show_random_quote()
-        print(termcolor.colored("Обновления: fr!AI с gpt-4.1, frCAPTCHA", "green", attrs=["bold"]))
-        print(termcolor.colored("Запускаю бота...", "yellow"))
-
         try:
-            # Запускаем бота
+            clear_screen()
+            print_ascii_titles()
+            print(termcolor.colored("ʟɪᴛᴇʜᴀᴄᴋ 20 ʙʏ @error_kill", "green", attrs=["bold"]))
+            show_random_quote()
+            print(termcolor.colored("Обновления: fr!AI с gpt-4.1, frCAPTCHA", "green", attrs=["bold"]))
+            print(termcolor.colored("Запускаю бота...", "yellow"))
+
             await init_bot()
             print(termcolor.colored("Бот запущен!", "green", attrs=["bold"]))
 
-            # После запуска получаем защищённые ID
-            ids = await get_ids_from_post(client, CHECK_POST)
-            global PROTECTED_USER_ID
-            PROTECTED_USER_ID = ids
-            print(f"[ℹ] PROTECTED_USER_ID = {PROTECTED_USER_ID}")
-
-            # Бот продолжает работать
             await client.run_until_disconnected()
-
         except Exception as e:
             print(termcolor.colored(f"❌ Ошибка запуска: {e}", "red"))
             traceback.print_exc()

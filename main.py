@@ -87,10 +87,11 @@ class LicenseChecker(BaseChannelChecker):
         super().__init__(client, "https://t.me/+HzPHLcDoa044OGVi")
 
     async def check_license(self, user_id: int) -> bool:
+        """Проверка, есть ли лицензия у пользователя"""
         return await self.is_member(user_id)
 
     def get_hwid(self) -> str:
-        # Получаем уникальный идентификатор устройства и хешируем его
+        """Возвращает хеш HWID устройства"""
         hwid_raw = str(uuid.getnode()) + str(platform.node())
         hwid_hash = hashlib.sha256(hwid_raw.encode()).hexdigest()
         return hwid_hash
@@ -100,7 +101,15 @@ class VipChecker(BaseChannelChecker):
         super().__init__(client, "https://t.me/+Q-TGGjUgkNNkMDgy")
 
     async def is_vip(self, user_id: int) -> bool:
+        """Проверка VIP-статуса пользователя"""
         return await self.is_member(user_id)
+
+    async def get_vip_expiry(self, user_id: int) -> str:
+        """Возвращает дату окончания VIP. Для примера пока пустая строка"""
+        # Можно подключить API или хранить даты в базе
+        if await self.is_vip(user_id):
+            return "∞"  # Бессрочный VIP
+        return "нет"
         
 config = load_config()
 api_id = int(config.get('api_id', 0))

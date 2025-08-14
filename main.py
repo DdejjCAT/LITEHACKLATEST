@@ -183,8 +183,9 @@ license_checker = LicenseChecker(client)
 vip_checker = VipChecker(client)
 
 async def init_bot():
-license_checker = LicenseChecker(client)
-vip_checker = VipChecker(client)
+    # Создаём экземпляры чекеров внутри функции (не обязательно, можно и глобально)
+    license_checker = LicenseChecker(client)
+    vip_checker = VipChecker(client)
 
     if not await license_checker.check_license(OWNER_USER_ID):
         print("❌ Лицензия не подтверждена")
@@ -194,6 +195,7 @@ vip_checker = VipChecker(client)
         print("💎 VIP активен")
     else:
         print("⚠️ VIP не активен")
+
 
 async def verify_captcha():
     async with aiohttp.ClientSession() as session:

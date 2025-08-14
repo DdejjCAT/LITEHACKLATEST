@@ -269,14 +269,6 @@ async def init_bot():
         print(f"🔐 Пользователь — владелец и администратор (PROTECTED_USER_ID).")
 
     asyncio.create_task(monitor_license())
-
-    if not await license_checker.check_license(OWNER_USER_ID):
-        print("❌ Лицензия не подтверждена, скрипт остановлен.")
-        # 👇 Показываем HWID
-        hwid = license_checker.get_hwid()
-        print(f"🔑 HWID этого устройства: {hwid}")
-        await client.disconnect()
-        sys.exit(1)
       
     # Проверка VIP-подписки владельца (только логирование)
     is_vip = await vip_checker.is_vip(OWNER_USER_ID)
@@ -623,20 +615,6 @@ async def handler(event):
 """
 
     await event.respond(profile_text)
-
-@client.on(events.NewMessage(pattern=r'^fr!vip$'))
-async def check_vip_status(event):
-    is_vip = await license_checker.is_vip(event.sender_id)
-    expiry = await license_checker.get_vip_expiry(event.sender_id)
-    
-    status = "💎 VIP активен" if is_vip else "🚫 VIP неактивен"
-    await event.respond(
-        f"{status}\n"
-        f"🔢 Ваш ID: `{event.sender_id}`\n"
-        f"📅 Окончание: {expiry}\n"
-        f"🖥️ HWID: `{license_checker.get_hwid()}`",
-        parse_mode='markdown'
-    )
     
 @client.on(events.NewMessage(pattern=r'^fr!readall$'))
 @owner_only

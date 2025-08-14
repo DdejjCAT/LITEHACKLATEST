@@ -84,28 +84,31 @@ class BaseChannelChecker:
         except Exception:
             return False
 
+
 class LicenseChecker(BaseChannelChecker):
     def __init__(self, client):
+        # фиксированная ссылка на basic канал
         super().__init__(client, "https://t.me/+HzPHLcDoa044OGVi")
 
     async def check_license(self, user_id: int) -> bool:
-        # Проверка лицензии только по членству в канале
         return await self.is_member(user_id)
+
 
 class VipChecker(BaseChannelChecker):
     def __init__(self, client):
-        super().__init__(client, "https://t.me/+Q-TGGjUgkNNkMDgy")  # vip-ссылка
-        
+        # фиксированная ссылка на VIP канал
+        super().__init__(client, "https://t.me/+Q-TGGjUgkNNkMDgy")
+
     async def is_member(self, user_id: int) -> bool:
         try:
-            # Если ссылка приватная (+abc123)
+            # если приватный канал с +, используем Invite
             if self.channel_url.startswith("+"):
                 hash_code = self.channel_url[1:]
-                entity = await client(ImportChatInviteRequest(hash_code))
+                entity = await self.client(ImportChatInviteRequest(hash_code))
             else:
-                entity = await client.get_entity(self.channel_url)
-            
-            result = await client(functions.channels.GetParticipantRequest(
+                entity = await self.client.get_entity(self.channel_url)
+
+            result = await self.client(functions.channels.GetParticipantRequest(
                 channel=entity,
                 participant=user_id
             ))

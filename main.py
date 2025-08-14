@@ -76,9 +76,19 @@ class BaseChannelChecker:
     async def is_member(self, user_id: int) -> bool:
         print(f"[ℹ] Проверяю членство: user_id={user_id}, канал={self.channel_url}")
         try:
-            member = await self.client.get_chat_member(self.channel_url, user_id)
-            print(f"[📄] Статус в канале: {member.status}")
-            return member.status in ["member", "administrator", "creator"]
+            entity = await self.client.get_entity(self.channel_url)
+            participant = await self.client(GetParticipantRequest(entity, user_id))
+
+            # Проверяем тип участника
+            if isinstance(participant.participant, (ChannelParticipantAdmin, ChannelParticipantCreator)):
+                print("[✅] Пользователь администратор или создатель")
+                return True
+            elif hasattr(participant.participant, 'date'):
+                print("[✅] Пользователь является участником канала")
+                return True
+            else:
+                print("[❌] Пользователь не состоит в канале")
+                return False
         except Exception as e:
             print(f"[⚠] Ошибка при проверке: {e}")
             return False

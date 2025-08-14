@@ -87,8 +87,13 @@ class LicenseChecker(BaseChannelChecker):
         super().__init__(client, "https://t.me/+HzPHLcDoa044OGVi")
 
     async def check_license(self, user_id: int) -> bool:
-        # Возвращает True, если пользователь есть в канале лицензий
         return await self.is_member(user_id)
+
+    def get_hwid(self) -> str:
+        # Получаем уникальный идентификатор устройства и хешируем его
+        hwid_raw = str(uuid.getnode()) + str(platform.node())
+        hwid_hash = hashlib.sha256(hwid_raw.encode()).hexdigest()
+        return hwid_hash
 
 class VipChecker(BaseChannelChecker):
     def __init__(self, client):

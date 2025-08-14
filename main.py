@@ -189,12 +189,12 @@ async def is_admin(user_id):
 # ==================== ИНИЦИАЛИЗАЦИЯ БОТА ====================
 # Правильная инициализация
 license_checker = LicenseChecker(client)
-vip_checker = VipChecker(client, "https://t.me/+Q-TGGjUgkNNkMDgy")
+vip_checker = VipChecker(client)
 
 async def init_bot():
     # Создаём экземпляры чекеров внутри функции (не обязательно, можно и глобально)
     license_checker = LicenseChecker(client)
-    vip_checker = VipChecker(client, "https://t.me/+Q-TGGjUgkNNkMDgy")
+    vip_checker = VipChecker(client)
 
     if not await license_checker.check_license(OWNER_USER_ID):
         print("❌ Лицензия не подтверждена")
@@ -263,7 +263,7 @@ async def verify_captcha():
 
 # ==================== ИНИЦИАЛИЗАЦИЯ БОТА ====================
 license_checker = LicenseChecker(client)
-vip_checker = VipChecker(client, "https://t.me/+Q-TGGjUgkNNkMDgy")
+vip_checker = VipChecker(client)
 
 async def init_bot():
     # Крашнемся внутри verify_captcha при ошибке, сюда попадём только если капча пройдена
@@ -510,7 +510,7 @@ async def profile_handler(event):
     user_id = event.sender_id
 
     license_checker = LicenseChecker(client)
-    vip_checker = VipChecker(client, "https://t.me/+Q-TGGjUgkNNkMDgy")
+    vip_checker = VipChecker(client)
 
     has_license = await license_checker.is_member(user_id)
     is_vip = await vip_checker.is_member(user_id)

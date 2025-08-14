@@ -66,30 +66,6 @@ def load_config():
         sys.exit(1)
     return config
 
-config = load_config()
-api_id = int(config.get('api_id', 0))
-api_hash = config.get('api_hash', '')
-phone_number = config.get('phone_number', '')
-session_name = config.get('session_name', 'session')
-BOT_USERNAME = config.get('BOT_USERNAME', '')
-STAT_BOT_USERNAME = config.get('STAT_BOT_USERNAME', '')
-ai_model = config.get('ai_model', '')
-ENABLE_FR_AI = str(config.get('ENABLE_FR_AI', False)).lower() == "true"
-
-client = TelegramClient(session_name, api_id, api_hash)
-
-
-# ==================== КЛАСС ПРОВЕРКИ ЛИЦЕНЗИЙ ====================
-import hashlib
-import platform
-import aiohttp
-import asyncio
-from datetime import datetime, timezone
-
-from telethon import functions, types
-from telethon.tl.types import ChannelParticipant, ChannelParticipantSelf
-
-
 class BaseChannelChecker:
     def __init__(self, client, channel_url: str):
         self.client = client
@@ -105,7 +81,7 @@ class BaseChannelChecker:
             return isinstance(result.participant, (ChannelParticipant, ChannelParticipantSelf))
         except Exception:
             return False
-
+            
 class LicenseChecker(BaseChannelChecker):
     def __init__(self, client):
         super().__init__(client, "https://t.me/+HzPHLcDoa044OGVi")
@@ -113,7 +89,18 @@ class LicenseChecker(BaseChannelChecker):
 class VipChecker(BaseChannelChecker):
     def __init__(self, client):
         super().__init__(client, "https://t.me/+Q-TGGjUgkNNkMDgy")
+        
+config = load_config()
+api_id = int(config.get('api_id', 0))
+api_hash = config.get('api_hash', '')
+phone_number = config.get('phone_number', '')
+session_name = config.get('session_name', 'session')
+BOT_USERNAME = config.get('BOT_USERNAME', '')
+STAT_BOT_USERNAME = config.get('STAT_BOT_USERNAME', '')
+ai_model = config.get('ai_model', '')
+ENABLE_FR_AI = str(config.get('ENABLE_FR_AI', False)).lower() == "true"
 
+client = TelegramClient(session_name, api_id, api_hash)
 # ==================== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ====================
 OWNER_USER_ID = None
 last_vip_status = None
@@ -177,8 +164,8 @@ async def is_admin(user_id):
     return user_id == OWNER_USER_ID
 
 # ==================== ИНИЦИАЛИЗАЦИЯ БОТА ====================
-license_checker = LicenseChecker()
-vip_checker = VipChecker(vip_url="https://fenst4r.life/api/check_vip")
+license_checker = LicenseChecker(client)
+vip_checker = VipChecker(client)
 
 async def init_bot():
     if not await license_checker.check_license(OWNER_USER_ID):
@@ -577,9 +564,23 @@ async def ascii_art_handler(event):
     response = f"```\n {ascii_text[:1999]}{'...' if len(ascii_text) > 1999 else ''}\n```"
     await event.respond(response, parse_mode='markdown')
 
-# Загрузка ссылок на оплату
-with open("payment_links.json", "r", encoding="utf-8") as f:
+payment_file = "payment_links.json"
+
+# Проверяем, есть ли файл; если нет — создаём пустой
+if not os.path.exists(payment_file):
+    default_links = {
+        "basic": "https://t.me/send?start=SBHzPHLcDoa044OGVi",
+        "vip": "https://t.me/send?start=SBQ-TGGjUgkNNkMDgy"
+    }
+    with open(payment_file, "w", encoding="utf-8") as f:
+        json.dump(default_links, f, indent=4, ensure_ascii=False)
+
+# Загружаем ссылки
+with open(payment_file, "r", encoding="utf-8") as f:
     payment_links = json.load(f)
+
+# Проверка
+print("Загруженные ссылки на оплату:", payment_links)
 
 @client.on(events.NewMessage(pattern=r'^fr!pay$'))
 async def handler(event):

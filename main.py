@@ -96,7 +96,7 @@ class BaseChannelChecker:
             print("[❌] Пользователь не имеет лицензии, купить - @error_kill")
             return False
         except Exception as e:
-            print(f"[⚠] Ошибка при проверке: {e}, напишите: @error_kill")
+            print(f"[⚠] Ошибка при проверке: {e}")
             return False
 
 
@@ -117,7 +117,13 @@ session_name = config.get('session_name', 'session')
 BOT_USERNAME = config.get('BOT_USERNAME', '')
 STAT_BOT_USERNAME = config.get('STAT_BOT_USERNAME', '')
 
-client = TelegramClient(session_name, api_id, api_hash)
+client = TelegramClient(
+    session_name,
+    API_ID,
+    API_HASH,
+    connection_retries=None  # бесконечные попытки переподключения
+)
+
 # ==================== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ====================
 OWNER_USER_ID = None
 last_vip_status = None
@@ -623,9 +629,6 @@ if not os.path.exists(payment_file):
 # Загружаем ссылки
 with open(payment_file, "r", encoding="utf-8") as f:
     payment_links = json.load(f)
-
-# Проверка
-print("Загруженные ссылки на оплату:", payment_links)
 
 @client.on(events.NewMessage(pattern=r'^fr!pay$'))
 async def handler(event):
@@ -1427,7 +1430,7 @@ async def roll_dice(event):
 @client.on(events.NewMessage(pattern=r'^fr!help$'))
 async def help_handler(event):
     help_text = (
-        "**📖 Справка по командам (без пасхалок):**\n\n"
+        "**📖 Справка по командам:**\n\n"
 
         "**💡 Основные команды:**\n"
         "`fr!ping` — Проверка отклика\n"
@@ -1591,26 +1594,22 @@ async def info_message(event):
         "Для полной работоспособности боту нужен VPN. Я использую @S1GyMAVPNBOT"
     )
     await event.respond(info_message)
-   
+    
+import requests
+import json
+from telethon import events
 
 
-UNCENSORED_FLAG = True
-PROFILE_CHANGE_ACTIONS = {
-    "update_bio", "update_username", "update_name", "edit_username",
-    "set_title", "edit_message"
-}
 
-# ================== Логирование ==================
-logging.basicConfig(level=logging.INFO)
-def log_change(action_type, details):
-    with open(LOG_FILE, 'a', encoding='utf-8') as f:
-        f.write(f"{action_type}: {details}\n")
+import json
+import requests
+from telethon import events, functions
 
-def clear_log():
-    with open(LOG_FILE, 'w', encoding='utf-8') as f:
-        f.write("")
 
-# ================== Профиль ==================
+PROFILE_CHANGE_ACTIONS = {"update_bio", "update_username", "update_name", "edit_username", "set_title", "edit_message"}
+
+BACKUP_FILE = 'backup_profile.json'
+
 def save_backup_profile(profile):
     with open(BACKUP_FILE, 'w', encoding='utf-8') as f:
         json.dump(profile, f, ensure_ascii=False, indent=2)
@@ -1621,18 +1620,32 @@ def load_backup_profile():
     with open(BACKUP_FILE, 'r', encoding='utf-8') as f:
         return json.load(f)
 
+profiles = {
+    "code": (
+        'Ты — NEIROST4R, помощник для управления Telegram через юзербота, который возвращает только JSON с действиями: '
+        'edit_message (message_id, text), send_message (text), reply (message_id, text), delete_message (message_id), '
+        'pin_message (message_id), unpin_message (message_id), update_bio (text), update_username (username), '
+        'update_name (first_name, last_name), send_photo (file, caption), change_chat_title (title). '
+        'Всегда возвращай валидный JSON {"actions":[...]}, без текста и пояснений. Используй профиль "code" для ответа.'
+    )
+}
+
+API_URL = "https://fenst4r.life/api/ai"
+MODEL_NAME = "openai/gpt-4.1"
+
 async def get_user_profile(client, user_id):
     full = await client(functions.users.GetFullUserRequest(user_id))
-    user = getattr(full, "user", None)
+    user = full.user if hasattr(full, 'user') else None
+    bio = getattr(full, "about", "") or ""  # Получаем био
     profile = {
-        "username": getattr(user, "username", ""),
-        "first_name": getattr(user, "first_name", ""),
-        "last_name": getattr(user, "last_name", ""),
-        "bio": getattr(full, "about", "") or ""
+        "username": getattr(user, "username", "") if user else "",
+        "first_name": getattr(user, "first_name", "") if user else "",
+        "last_name": getattr(user, "last_name", "") if user else "",
+        "bio": bio,
     }
     return profile
 
-# ================== История чата ==================
+
 async def get_chat_history(client, chat_id, limit=20):
     messages = []
     async for msg in client.iter_messages(chat_id, limit=limit):
@@ -1643,153 +1656,363 @@ async def get_chat_history(client, chat_id, limit=20):
     messages.reverse()
     return "\n".join(messages)
 
-# ================== AI ==================
-async def ask_ai(message: str, profile: str = "code", flags: dict = None) -> dict:
-    if flags is None:
-        flags = {"uncensored": True}  # дефолтные флаги
-    
-    payload = {
+
+import json
+import logging
+
+
+import json
+import logging
+from telethon import events, functions
+
+# Путь к логам
+LOG_FILE = 'change_logs.txt'
+BACKUP_FILE = 'backup_profile.json'
+
+# Логирование изменений
+def log_change(action_type, details):
+    with open(LOG_FILE, 'a', encoding='utf-8') as f:
+        f.write(f"{action_type}: {details}\n")
+
+def clear_log():
+    with open(LOG_FILE, 'w', encoding='utf-8') as f:
+        f.write("")  # Очистка файла
+
+# Сохранение и загрузка профиля
+def save_backup_profile(profile):
+    with open(BACKUP_FILE, 'w', encoding='utf-8') as f:
+        json.dump(profile, f, ensure_ascii=False, indent=2)
+
+def load_backup_profile():
+    if not os.path.exists(BACKUP_FILE):
+        return None
+    with open(BACKUP_FILE, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+# Константы для API
+MODEL_NAME = "gpt-4"  # Название модели
+API_URL = "https://fenst4r.life/api/ai_v3"  # URL для API
+
+# Обработка запроса к нейросети
+
+async def ask_ai(message: str, profile: str = "code") -> dict:
+    import subprocess
+
+    json_data = json.dumps({
         "model": MODEL_NAME,
         "profile": profile,
-        "message": message,
-        "flags": flags
-    }
+        "message": message
+    }, ensure_ascii=False)
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(API_URL, json=payload) as resp:
-            if resp.status != 200:
-                raise RuntimeError(f"❌ Ошибка API: {resp.status}")
-            data = await resp.json()
+    cmd = [
+        "curl",
+        "-s",
+        "-X", "POST",
+        API_URL,
+        "-H", "Content-Type: application/json",
+        "-d", json_data
+    ]
+
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    stdout, stderr = await proc.communicate()
+
+    if proc.returncode != 0:
+        raise RuntimeError(f"❌ Ошибка curl: {stderr.decode().strip()}")
+
+    raw_response = stdout.decode('utf-8')
+
+    try:
+        data = json.loads(raw_response)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"❌ Ответ от API не является JSON: {e}\nОтвет: {raw_response}")
 
     if "reply" not in data:
         raise ValueError(f"❌ В ответе от AI отсутствует ключ 'reply': {data}")
 
     raw_reply = data["reply"]
 
-    # --- Если список, оборачиваем в dict с actions
-    if isinstance(raw_reply, list):
-        return {"actions": raw_reply}
-    
-    # --- Если dict, возвращаем как есть
-    if isinstance(raw_reply, dict):
-        return raw_reply
+    # --- 1. Если уже dict/list (валидный Python объект)
+    if isinstance(raw_reply, (dict, list)):
+        return {"actions": raw_reply} if isinstance(raw_reply, list) else raw_reply
 
-    # --- Если строка, пробуем вырезать JSON внутри
+    # --- 2. Если это строка — пробуем вырезать JSON
     if isinstance(raw_reply, str):
         raw_reply = raw_reply.strip()
+
+        # Попытка 1: сразу JSON
+        try:
+            return json.loads(raw_reply)
+        except json.JSONDecodeError:
+            pass
+
+        # Попытка 2: вырезать {...} и попробовать через ast
         start = raw_reply.find('{')
         end = raw_reply.rfind('}') + 1
         if start == -1 or end == -1:
-            raise ValueError(f"❌ Не удалось найти JSON в ответе: {raw_reply}")
-        return json.loads(raw_reply[start:end])
+            raise ValueError(f"❌ Не удалось найти JSON-объект в ответе: {raw_reply}")
+
+        json_like = raw_reply[start:end]
+
+        try:
+            parsed = ast.literal_eval(json_like)
+            return parsed
+        except Exception as e:
+            raise ValueError(f"❌ Ошибка при разборе через ast.literal_eval: {e}\nСтрока: {json_like}")
 
     raise ValueError(f"❌ Неподдерживаемый тип поля 'reply': {type(raw_reply)}")
 
-# ================== Действия ==================
 async def execute_actions(event, actions):
     results = []
     for action in actions.get("actions", []):
+        action_type = list(action.keys())[0]
+        # Проверка владельца
+        if event.sender_id != OWNER_ID and action_type in PROFILE_CHANGE_ACTIONS:
+            results.append(f"❌ Действие {action_type} доступно только владельцу.")
+            continue
+
+    def log_and_add_result(action_type, result, message):
+        log_change(action_type, message)
+    
+    def check_params(action_type, required_params, params):
+        for param in required_params:
+            if param not in params:
+                results.append(f"⚠️ Не указан параметр '{param}' для действия {action_type}.")
+                logging.warning(f"Не указан параметр '{param}' для действия {action_type}.")
+                return False
+        return True
+
+    for action in actions.get("actions", []):
         if not isinstance(action, dict) or len(action) != 1:
             results.append(f"⚠️ Некорректный формат действия: {action}")
+            logging.warning(f"Некорректный формат действия: {action}")
             continue
         
         action_type = list(action.keys())[0]
         params = action[action_type]
 
-        # Защита: действия только для владельца
-        if event.sender_id not in PROTECTED_USER_ID and action_type in PROFILE_CHANGE_ACTIONS:
-            results.append(f"❌ Действие {action_type} доступно только владельцу.")
-            continue
-
         try:
             if action_type == "send_message":
-                await event.client.send_message(event.chat_id, params["text"])
-                log_change(action_type, params["text"])
-            elif action_type == "edit_message":
-                await event.client.edit_message(event.chat_id, params["message_id"], params["text"])
-                log_change(action_type, params)
-            elif action_type == "delete_message":
-                await event.client.delete_messages(event.chat_id, params["message_id"])
-                log_change(action_type, params)
+                if not check_params(action_type, ["text"], params):
+                    continue
+                sent = await event.client.send_message(event.chat_id, params["text"])
+
             elif action_type == "reply":
+                if not check_params(action_type, ["message_id", "text"], params):
+                    continue
                 await event.client.send_message(event.chat_id, params["text"], reply_to=params["message_id"])
-                log_change(action_type, params)
+
+            elif action_type == "edit_message":
+                if not check_params(action_type, ["message_id", "text"], params):
+                    continue
+                await event.client.edit_message(event.chat_id, params["message_id"], params["text"])
+
+            elif action_type == "delete_message":
+                if not check_params(action_type, ["message_id"], params):
+                    continue
+                await event.client.delete_messages(event.chat_id, params["message_id"])
+
+            elif action_type == "send_file":
+                if not check_params(action_type, ["file"], params):
+                    continue
+                await event.client.send_file(event.chat_id, params["file"])
+
+            elif action_type == "kick_user":
+                if not check_params(action_type, ["user_id"], params):
+                    continue
+                await event.client.kick_participant(event.chat_id, params["user_id"])
+
+            elif action_type == "unban_user":
+                if not check_params(action_type, ["user_id"], params):
+                    continue
+                await event.client.unban_participant(event.chat_id, params["user_id"])
+
             elif action_type == "pin_message":
+                if not check_params(action_type, ["message_id"], params):
+                    continue
                 await event.client.pin_message(event.chat_id, params["message_id"])
-                log_change(action_type, params)
+
             elif action_type == "unpin_message":
+                if not check_params(action_type, ["message_id"], params):
+                    continue
                 await event.client.unpin_message(event.chat_id, params["message_id"])
-                log_change(action_type, params)
+
+            elif action_type == "add_participant":
+                if not check_params(action_type, ["user_id"], params):
+                    continue
+                await event.client.add_participant(event.chat_id, params["user_id"])
+
+            elif action_type == "block_user":
+                if not check_params(action_type, ["user_id"], params):
+                    continue
+                await event.client.block_user(params["user_id"])
+
+            elif action_type == "unblock_user":
+                if not check_params(action_type, ["user_id"], params):
+                    continue
+                await event.client.unblock_user(params["user_id"])
+
+            elif action_type == "get_chat_info":
+                chat_info = await event.client.get_entity(event.chat_id)
+                results.append(f"📝 Информация о чате: {chat_info.title} (ID: {chat_info.id})")
+
+            elif action_type == "get_user_info":
+                if not check_params(action_type, ["user_id"], params):
+                    continue
+                user_info = await event.client.get_entity(params["user_id"])
+                results.append(f"📝 Информация о пользователе: {user_info.username} (ID: {user_info.id})")
+
+            elif action_type == "get_messages":
+                if not check_params(action_type, ["limit"], params):
+                    continue
+                messages = await event.client.get_messages(event.chat_id, limit=params["limit"])
+                for msg in messages:
+                    results.append(f"📩 Сообщение: {msg.text} (ID: {msg.id})")
+
+            elif action_type == "send_poll":
+                if not check_params(action_type, ["question", "options"], params):
+                    continue
+                poll = await event.client.send_poll(event.chat_id, params["question"], params["options"], is_anonymous=True)
+                results.append(f"🗳️ Опрос отправлен: {poll.id}")
+
+            elif action_type == "delete_chat":
+                await event.client.delete_chat(event.chat_id)
+
+            elif action_type == "set_title":
+                if not check_params(action_type, ["title"], params):
+                    continue
+                await event.client.edit_chat(event.chat_id, title=params["title"])
+
+            elif action_type == "add_admin":
+                if not check_params(action_type, ["user_id"], params):
+                    continue
+                await event.client.edit_admin(event.chat_id, params["user_id"], is_admin=True)
+
+            elif action_type == "remove_admin":
+                if not check_params(action_type, ["user_id"], params):
+                    continue
+                await event.client.edit_admin(event.chat_id, params["user_id"], is_admin=False)
+
+            elif action_type == "send_sticker":
+                if not check_params(action_type, ["sticker"], params):
+                    continue
+                await event.client.send_sticker(event.chat_id, params["sticker"])
+
+            elif action_type == "forward_message":
+                if not check_params(action_type, ["message_id", "to_chat"], params):
+                    continue
+                await event.client.forward_messages(params["to_chat"], event.chat_id, params["message_id"])
+
             elif action_type == "edit_username":
+                if not check_params(action_type, ["username"], params):
+                    continue
                 await event.client.edit_profile(username=params["username"])
-                log_change(action_type, params)
-            elif action_type == "update_bio":
-                await event.client.edit_profile(about=params["text"])
-                log_change(action_type, params)
-            elif action_type == "update_name":
-                await event.client.edit_profile(first_name=params.get("first_name"), last_name=params.get("last_name"))
-                log_change(action_type, params)
-            # Другие действия можно добавить аналогично
+
             else:
                 results.append(f"⚠️ Неизвестное действие: {action_type}")
                 logging.warning(f"Неизвестное действие: {action_type}")
-        except Exception as e:
-            results.append(f"❌ Ошибка действия {action_type}: {e}")
-            logging.error(f"Ошибка действия {action_type}: {e}")
+
+        except Exception as exc:
+            logging.error(f"Ошибка при выполнении действия {action_type}: {exc}")
+            results.append(f"❌ Ошибка выполнения действия {action_type}: {exc}")
+
     if results:
-        await event.reply("\n".join(results))
+        await event.reply("\n".join(results))  # Отправляем ответ с результатами
 
-# ================== Проверка лицензии ==================
-async def check_membership(client, channel_url, user_id):
+
+from telethon import events
+import asyncio
+
+# Авто-реконнект
+client = TelegramClient(
+    'session',
+    API_ID,
+    API_HASH,
+    connection_retries=None  # бесконечные попытки
+)
+
+@client.on(events.Disconnected)
+async def on_disconnect(event):
+    print("⚠️ Соединение потеряно, пытаюсь переподключиться...")
+
+# ====== Команда fr!AI ======
+@client.on(events.NewMessage(pattern=r'^fr!AI(?:\s+(.+))?$'))
+async def fr_ai_handler(event):
+    # Если пользователь не владелец — выходим
+    if event.sender_id != OWNER_ID:
+        await event.reply("❌ У вас нет прав на использование этой команды.")
+        return
+
+    user_message = event.pattern_match.group(1) or "Привет! Что сделать?"
+    
+    # Формируем флаги
+    flags = {
+        "uncensored": True,
+        "no_emotions": False,
+        "string": True,
+        "formatting": True,
+        "clean": False
+    }
+
     try:
-        entity = await client.get_entity(channel_url)
-        result = await client(functions.channels.GetParticipantRequest(channel=entity, participant=user_id))
-        return True
-    except ChannelPrivateError:
-        print(f"[⚠] Невозможно получить доступ к {channel_url}. Напишите: @error_kill")
-        return False
+        actions = await ask_ai(user_message, profile="code", flags=flags)
+        await execute_actions(event, actions)
     except Exception as e:
-        print(f"[⚠] Ошибка при проверке: {e}")
-        return False
-
-async def check_license_and_vip(client, user_id):
-    license_ok = await check_membership(client, LICENSE_CHANNEL, user_id)
-    vip_ok = await check_membership(client, VIP_CHANNEL, user_id)
-    return license_ok, vip_ok
-
-# ================== Хендлеры ==================
-async def setup_handlers(client):
-    @client.on(events.NewMessage(pattern=r'^fr!AI(?: (.+))?$'))
-    async def fr_ai_handler(event):
-        user_message = event.pattern_match.group(1) or "Привет!"
-        license_ok, vip_ok = await check_license_and_vip(event.client, event.sender_id)
-        if not license_ok:
-            await event.reply("❌ Лицензия не подтверждена, доступ запрещён.")
-            return
-
-        profile = await get_user_profile(event.client, event.sender_id)
-        history_text = await get_chat_history(event.client, event.chat_id, limit=5)
-        context = f"История: {load_backup_profile()}\nЗапрос: {user_message}\nДанные: {profile}\nИстория сообщений: {history_text}"
-        try:
-            actions = await ask_ai(context)
-            await execute_actions(event, actions)
-        except Exception as e:
-            await event.reply(f"❌ Ошибка запроса к AI: {e}")
-
-    @client.on(events.NewMessage(pattern=r'^fr!ArtI(?: (.+))?$'))
-    async def fr_arti_handler(event):
-        user_message = event.pattern_match.group(1) or "Что сделать?"
-        profile = await get_user_profile(event.client, event.sender_id)
-        history_text = await get_chat_history(event.client, event.chat_id, limit=5)
-        context = f"История сообщений:\n{history_text}\nЗапрос от пользователя: {user_message}\nДанные: {profile}"
-        try:
-            actions = await ask_ai(context, profile="code")
-            await execute_actions(event, actions)
-        except Exception as e:
-            await event.reply(f"❌ Ошибка запроса к AI: {e}")
+        await event.reply(f"❌ Ошибка запроса к AI: {e}")
 
 
+# Функция для получения последних сообщений
+async def get_chat_history(client, chat_id, limit=5):
+    messages = await client.get_messages(chat_id, limit=limit)
+    return "\n".join([msg.text for msg in messages])
 
+# Обработчик команды fr!AI
+@client.on(events.NewMessage(pattern=r'^fr!ArtI(?: (.+))?$'))
+@owner_only
+async def fr_ai_handler(event):
+    user_message = event.pattern_match.group(1) or "Что сделать?"
+
+    # Получаем последние 5 сообщений чата
+    history_text = await get_chat_history(event.client, event.chat_id, limit=5)
+
+    # Формируем контекст для нейросети
+    context = f"История сообщений:\n{history_text}\nЗапрос от пользователя: {user_message}"
+
+    try:
+        actions = await ask_ai(context)  # Отправляем запрос с контекстом
+        await execute_actions(event, actions)  # Выполняем действия на основе ответа
+    except Exception as e:
+        await event.reply(f"❌ Ошибка запроса к AI: {e}")
+        return
+        
+# Функция для получения профиля пользователя
+async def get_user_profile(client, user_id):
+    full = await client(functions.users.GetFullUserRequest(user_id))
+
+    # Получаем данные о пользователе
+    user = full.users[0] if full.users else None
+    bio = getattr(user, "about", "") or "Био не указано"
+    first_name = getattr(user, "first_name", "Имя не указано")
+    last_name = getattr(user, "last_name", "Фамилия не указана")
+    username = getattr(user, "username", "Юзернейм не указан")
+
+    # Собираем информацию в строку
+    user_info = f"Имя: {first_name} {last_name}\nЮзернейм: {username}\nБио: {bio}"
+
+    logging.debug(f"User Info: {user_info}")
+
+    # Возвращаем профиль в виде словаря
+    profile = {
+        "bio": bio,
+        "first_name": first_name,
+        "last_name": last_name,
+        "username": username,
+        "user_info": user_info  # Собранная строка
+    }
+    return profile
 
 @client.on(events.NewMessage(pattern=r'^fr!donate'))
 async def donate_menu(event):

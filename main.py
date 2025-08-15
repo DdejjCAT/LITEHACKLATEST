@@ -1770,7 +1770,7 @@ async def execute_actions(event, actions):
     for action in actions.get("actions", []):
         action_type = list(action.keys())[0]
         # Проверка владельца
-        if event.sender_id != OWNER_ID and action_type in PROFILE_CHANGE_ACTIONS:
+        if event.sender_id != OWNER_USER_ID and action_type in PROFILE_CHANGE_ACTIONS:
             results.append(f"❌ Действие {action_type} доступно только владельцу.")
             continue
 
@@ -1930,7 +1930,7 @@ import asyncio
 @client.on(events.NewMessage(pattern=r'^fr!AI(?:\s+(.+))?$'))
 async def fr_ai_handler(event):
     # Если пользователь не владелец — выходим
-    if event.sender_id != OWNER_ID:
+    if event.sender_id != OWNER_USER_ID:
         await event.reply("❌ У вас нет прав на использование этой команды.")
         return
 

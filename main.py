@@ -1687,7 +1687,7 @@ def load_backup_profile():
         return json.load(f)
 
 # Константы для API
-MODEL_NAME = "gpt-4"  # Название модели
+MODEL_NAME = "jamba-large"  # Название модели
 API_URL = "https://fenst4r.life/api/ai_v4"  # URL для API
 
 # Обработка запроса к нейросети

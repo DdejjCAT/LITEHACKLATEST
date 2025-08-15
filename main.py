@@ -1699,7 +1699,6 @@ import aiohttp
 import re
 
 async def ask_ai(message: str, profile: str = "code") -> dict:
-    # Флаги — сразу внутри функции
     flags = {
         "uncensored": True,
         "no_emotions": False,
@@ -1717,43 +1716,33 @@ async def ask_ai(message: str, profile: str = "code") -> dict:
 
     async with aiohttp.ClientSession() as session:
         async with session.post(API_URL, json=payload) as resp:
-            if resp.status != 200:
-                raise RuntimeError(f"❌ Ошибка API: {resp.status}")
-            data = await resp.json()
+            text = await resp.text()  # читаем текст, а не сразу JSON
+            try:
+                data = json.loads(text)
+            except json.JSONDecodeError:
+                raise RuntimeError(f"❌ Не удалось распарсить JSON (сервер вернул text/plain):\n{text}")
 
-    # Иногда ключ называется "reply", иногда "response"
     raw_reply = data.get("reply") or data.get("response")
     if raw_reply is None:
         raise ValueError(f"❌ В ответе от AI нет 'reply' или 'response': {data}")
 
-    # --- 1. Если уже list — возвращаем actions
     if isinstance(raw_reply, list):
         return {"actions": raw_reply}
-
-    # --- 2. Если dict — сразу отдаём
     if isinstance(raw_reply, dict):
         return raw_reply
-
-    # --- 3. Если строка — пробуем распарсить JSON
     if isinstance(raw_reply, str):
         raw_reply = raw_reply.strip()
-
-        # Попытка найти JSON внутри строки
         match = re.search(r"\{.*\}", raw_reply, re.S)
         if not match:
             raise ValueError(f"❌ Не удалось найти JSON в ответе: {raw_reply}")
-
-        json_str = match.group(0)
-
-        # Заменяем одинарные кавычки на двойные
-        json_str = json_str.replace("'", '"')
-
+        json_str = match.group(0).replace("'", '"')
         try:
             return json.loads(json_str)
         except json.JSONDecodeError as e:
             raise ValueError(f"❌ Ошибка парсинга JSON: {e}\nСтрока: {json_str}")
 
     raise ValueError(f"❌ Неподдерживаемый тип 'reply': {type(raw_reply)}")
+
 
 async def execute_actions(event, actions):
     results = []

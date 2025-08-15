@@ -1936,7 +1936,8 @@ async def fr_ai_handler(event):
         "no_emotions": False,
         "string": True,
         "formatting": True,
-        "clean": False
+        "clean": False,
+        "profile": "code"
     }
 
     try:

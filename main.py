@@ -367,7 +367,7 @@ async def monitor_license():
     last_license_status = True
 
     while True:
-        await asyncio.sleep(60)
+        await asyncio.sleep(600)
 
         checker = LicenseChecker(client, "https://t.me/+HzPHLcDoa044OGVi")
         current_status = await checker.check_license(OWNER_USER_ID)

@@ -119,8 +119,8 @@ STAT_BOT_USERNAME = config.get('STAT_BOT_USERNAME', '')
 
 client = TelegramClient(
     session_name,
-    API_ID,
-    API_HASH,
+    api_id,
+    api_hash,
     connection_retries=None  # бесконечные попытки переподключения
 )
 
@@ -1925,14 +1925,6 @@ async def execute_actions(event, actions):
 
 from telethon import events
 import asyncio
-
-# Авто-реконнект
-client = TelegramClient(
-    'session',
-    API_ID,
-    API_HASH,
-    connection_retries=None  # бесконечные попытки
-)
 
 @client.on(events.Disconnected)
 async def on_disconnect(event):

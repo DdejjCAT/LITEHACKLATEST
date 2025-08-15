@@ -1698,6 +1698,7 @@ import json
 import aiohttp
 import re
 
+
 async def ask_ai(message: str, profile: str = "code") -> dict:
     flags = {
         "uncensored": True,
@@ -1714,36 +1715,38 @@ async def ask_ai(message: str, profile: str = "code") -> dict:
         "flags": flags
     }
 
+    print(f"➡ Отправка запроса: {payload}")  # лог запроса
+
     async with aiohttp.ClientSession() as session:
         async with session.post(API_URL, json=payload) as resp:
-            text = await resp.text()  # читаем текст всегда
+            text = await resp.text()
+            print(f"⬅ Получен ответ (status {resp.status}): {text[:500]}")  # первые 500 символов
+
             if resp.status != 200:
                 raise RuntimeError(f"❌ Ошибка API: {resp.status}\n{text}")
 
-            # --- Пытаемся найти JSON внутри текста
+            # пытаемся найти JSON внутри текста
             match = re.search(r"\{.*\}", text, re.S)
             if match:
                 json_str = match.group(0).replace("'", '"')
                 try:
                     data = json.loads(json_str)
+                    print(f"✅ Успешно распарсили JSON: {data}")  # лог JSON
                 except json.JSONDecodeError:
-                    data = {"reply": text}  # если не парсится — оставляем текст
+                    data = {"reply": text}
+                    print("⚠ Не удалось распарсить JSON, оставляем как текст")
             else:
-                data = {"reply": text}  # JSON не найден — возвращаем текст
+                data = {"reply": text}
+                print("⚠ JSON не найден, оставляем как текст")
 
     raw_reply = data.get("reply") or data.get("response")
     if raw_reply is None:
-        return {"reply": text}  # на всякий случай
+        return {"reply": text}
 
-    # --- 1. Если list — возвращаем actions
     if isinstance(raw_reply, list):
         return {"actions": raw_reply}
-
-    # --- 2. Если dict — сразу отдаём
     if isinstance(raw_reply, dict):
         return raw_reply
-
-    # --- 3. Если строка — проверяем JSON внутри
     if isinstance(raw_reply, str):
         raw_reply = raw_reply.strip()
         match = re.search(r"\{.*\}", raw_reply, re.S)
@@ -1752,10 +1755,9 @@ async def ask_ai(message: str, profile: str = "code") -> dict:
             try:
                 return json.loads(json_str)
             except json.JSONDecodeError:
-                pass  # оставляем как текст
+                pass
         return {"reply": raw_reply}
 
-    # --- 4. На всякий случай
     return {"reply": str(raw_reply)}
 
 async def execute_actions(event, actions):

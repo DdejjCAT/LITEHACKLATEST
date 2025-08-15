@@ -1698,7 +1698,6 @@ import json
 import aiohttp
 import re
 
-
 async def ask_ai(message: str, profile: str = "code") -> dict:
     flags = {
         "uncensored": True,
@@ -1715,29 +1714,29 @@ async def ask_ai(message: str, profile: str = "code") -> dict:
         "flags": flags
     }
 
-    print(f"➡ Отправка запроса: {payload}")  # лог запроса
+    print(f"➡ Отправка запроса: {payload}", flush=True)
 
     async with aiohttp.ClientSession() as session:
         async with session.post(API_URL, json=payload) as resp:
             text = await resp.text()
-            print(f"⬅ Получен ответ (status {resp.status}): {text[:500]}")  # первые 500 символов
+            print(f"⬅ Получен ответ (status {resp.status}): {text[:500]}", flush=True)
 
             if resp.status != 200:
                 raise RuntimeError(f"❌ Ошибка API: {resp.status}\n{text}")
 
-            # пытаемся найти JSON внутри текста
+            # Пытаемся найти JSON внутри текста
             match = re.search(r"\{.*\}", text, re.S)
             if match:
                 json_str = match.group(0).replace("'", '"')
                 try:
                     data = json.loads(json_str)
-                    print(f"✅ Успешно распарсили JSON: {data}")  # лог JSON
+                    print(f"✅ Успешно распарсили JSON: {data}", flush=True)
                 except json.JSONDecodeError:
                     data = {"reply": text}
-                    print("⚠ Не удалось распарсить JSON, оставляем как текст")
+                    print("⚠ Не удалось распарсить JSON, оставляем как текст", flush=True)
             else:
                 data = {"reply": text}
-                print("⚠ JSON не найден, оставляем как текст")
+                print("⚠ JSON не найден, оставляем как текст", flush=True)
 
     raw_reply = data.get("reply") or data.get("response")
     if raw_reply is None:

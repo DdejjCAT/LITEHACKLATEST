@@ -1926,10 +1926,6 @@ async def execute_actions(event, actions):
 from telethon import events
 import asyncio
 
-@client.on(events.Disconnected)
-async def on_disconnect(event):
-    print("⚠️ Соединение потеряно, пытаюсь переподключиться...")
-
 # ====== Команда fr!AI ======
 @client.on(events.NewMessage(pattern=r'^fr!AI(?:\s+(.+))?$'))
 async def fr_ai_handler(event):

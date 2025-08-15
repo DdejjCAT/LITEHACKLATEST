@@ -1720,17 +1720,22 @@ async def ask_ai(message: str, profile: str = "code") -> dict:
             if resp.status != 200:
                 raise RuntimeError(f"❌ Ошибка API: {resp.status}\n{text}")
 
-            # Пытаемся распарсить JSON напрямую
-            try:
-                data = json.loads(text)
-            except json.JSONDecodeError:
-                data = {"reply": text}  # если JSON нет, возвращаем текст
+            # --- Пытаемся найти JSON внутри текста
+            match = re.search(r"\{.*\}", text, re.S)
+            if match:
+                json_str = match.group(0).replace("'", '"')
+                try:
+                    data = json.loads(json_str)
+                except json.JSONDecodeError:
+                    data = {"reply": text}  # если не парсится — оставляем текст
+            else:
+                data = {"reply": text}  # JSON не найден — возвращаем текст
 
     raw_reply = data.get("reply") or data.get("response")
     if raw_reply is None:
         return {"reply": text}  # на всякий случай
 
-    # --- 1. Если уже list — возвращаем actions
+    # --- 1. Если list — возвращаем actions
     if isinstance(raw_reply, list):
         return {"actions": raw_reply}
 
@@ -1738,7 +1743,7 @@ async def ask_ai(message: str, profile: str = "code") -> dict:
     if isinstance(raw_reply, dict):
         return raw_reply
 
-    # --- 3. Если строка — пробуем найти JSON внутри
+    # --- 3. Если строка — проверяем JSON внутри
     if isinstance(raw_reply, str):
         raw_reply = raw_reply.strip()
         match = re.search(r"\{.*\}", raw_reply, re.S)
@@ -1747,12 +1752,11 @@ async def ask_ai(message: str, profile: str = "code") -> dict:
             try:
                 return json.loads(json_str)
             except json.JSONDecodeError:
-                pass  # игнорируем, оставим как текст
-        return {"reply": raw_reply}  # если JSON не найден — возвращаем текст
+                pass  # оставляем как текст
+        return {"reply": raw_reply}
 
     # --- 4. На всякий случай
     return {"reply": str(raw_reply)}
-
 
 async def execute_actions(event, actions):
     results = []

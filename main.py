@@ -210,7 +210,6 @@ license_checker = LicenseChecker(client, "https://t.me/+HzPHLcDoa044OGVi")
 vip_checker = VipChecker(client, "https://t.me/+Q-TGGjUgkNNkMDgy")
 
 async def init_bot():
-
     # Запуск клиента
     await client.start(phone=phone_number)
     me = await client.get_me()

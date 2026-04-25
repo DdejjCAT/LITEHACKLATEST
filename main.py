@@ -205,69 +205,11 @@ async def init_bot():
     else:
         print("⚠️ VIP не активен")
 
-
-async def verify_captcha():
-    async with aiohttp.ClientSession() as session:
-        async with session.get("https://fenst4r.life/api/captcha?link=true") as resp:
-            try:
-                data = await resp.json(content_type=None)
-            except Exception as e:
-                print("Не удалось распарсить JSON:", e)
-                sys.exit(1)
-
-        if not data.get("link"):
-            print("Не удалось получить ссылку на капчу, перезапустите скрипт")
-            sys.exit(1)
-
-        print(f"\nПожалуйста, пройдите капчу по ссылке:\n{data['link']}")
-
-        captcha_id = data['id']
-        check_url = f"https://fenst4r.life/api/captcha/result/{captcha_id}"
-
-        max_attempts = 4
-        wait_seconds = 15
-
-        for i in range(max_attempts):
-            try:
-                async with session.get(check_url) as resp:
-                    if resp.status == 404:
-                        print(f"⏳ Капча ещё не создана на сервере (404). Повтор через {wait_seconds} сек...")
-                    elif resp.status != 200:
-                        print(f"⚠️ Ошибка HTTP при проверке капчи: {resp.status}")
-                    else:
-                        try:
-                            result = await resp.json(content_type=None)
-                            status = result.get("status")
-
-                            if status == "success":
-                                print("✅ Капча успешно пройдена!")
-                                return True
-                            elif status == "fail":
-                                print("❌ Капча не пройдена.")
-                                sys.exit(1)
-                            else:
-                                print(f"🔄 Ожидание прохождения капчи... {i+1}/{max_attempts} "
-                                      f"(Осталось времени: {(max_attempts - i - 1) * wait_seconds} сек)")
-                        except Exception as e:
-                            print(f"❌ Ошибка разбора ответа JSON: {e}")
-                            print(f"Ответ: {await resp.text()}")
-            except Exception as e:
-                print(f"Ошибка при соединении: {e}")
-
-            if i < max_attempts - 1:
-                await asyncio.sleep(wait_seconds)
-
-        print("⏰ Время ожидания истекло. Капча не пройдена.")
-        sys.exit(1)
-
-
 # ==================== ИНИЦИАЛИЗАЦИЯ БОТА ====================
 license_checker = LicenseChecker(client, "https://t.me/+HzPHLcDoa044OGVi")
 vip_checker = VipChecker(client, "https://t.me/+Q-TGGjUgkNNkMDgy")
 
 async def init_bot():
-    # Крашнемся внутри verify_captcha при ошибке, сюда попадём только если капча пройдена
-    await verify_captcha()
 
     # Запуск клиента
     await client.start(phone=phone_number)
